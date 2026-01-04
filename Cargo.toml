@@ -3,4 +3,26 @@
 resolver = "2"
 members = ["carburetor", "carburetor-macro"]
 
+[workspace.dependencies]
+carburetor = { path = "carburetor", version = "0.1.0" }
+carburetor-macro = { path = "carburetor-macro", version = "0.1.0" }
+syn = "2.0"
+quote = "1.0"
+proc-macro2 = "1.0"
+diesel = "2.2"
+trybuild = "1.0"
+tokio = "1.49"
+
+[package]
+name = "carburetor-example"
+version = "0.1.0"
+edition = "2024"
+
 [dependencies]
+carburetor = { workspace = true }
+diesel = { workspace = true, features = ["postgres"] }
+tokio = { workspace = true, features = ["full"] }
+
+[[example]]
+name = "simple-backend"
+path = "examples/simple_backend.rs"
