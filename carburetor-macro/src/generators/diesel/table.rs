@@ -21,6 +21,39 @@ fn rust_type_to_diesel_type(ty: &Type) -> Result<TokenStream2> {
                 "f32" => quote!(Float),
                 "f64" => quote!(Double),
                 "bool" => quote!(Bool),
+                "carburetor" => {
+                    if let Some(segment) = segments.get(1) {
+                        if segment.ident == "chrono" {
+                            match segments.get(2) {
+                                Some(x) if x.ident == "NaiveDateTime" => {
+                                    quote!(Timestamp)
+                                }
+                                Some(x) if x.ident == "DateTimeUtc" => {
+                                    quote!(Timestamptz)
+                                }
+                                Some(x) if x.ident == "NaiveDate" => {
+                                    quote!(Date)
+                                }
+                                Some(x) if x.ident == "NaiveTime" => {
+                                    quote!(Time)
+                                }
+                                _ => {
+                                    return Err(Error::new_spanned(
+                                        ty,
+                                        "Only NaiveDateTime, DateTime, NaiveDate and NaiveTime is supported for chrono",
+                                    ));
+                                }
+                            }
+                        } else {
+                            return Err(Error::new_spanned(
+                                ty,
+                                "Only carburetor::chrono is supported for carburetor type",
+                            ));
+                        }
+                    } else {
+                        return type_error;
+                    }
+                }
                 "Option" => {
                     if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
                         if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
@@ -58,8 +91,10 @@ pub(crate) fn generate_diesel_table(
 ) -> Result<TokenStream2> {
     let table_name = &config.table_name;
 
-    let id_column_ident = &table.id_column.ident;
-    let id_column = generate_table_field_token_stream(&table.id_column)?;
+    let id_column_ident = &table.sync_metadata_columns.id.ident;
+    let id_column = generate_table_field_token_stream(&table.sync_metadata_columns.id)?;
+    let last_sync_at_column =
+        generate_table_field_token_stream(&table.sync_metadata_columns.last_sync_at)?;
     let mut data_columns = vec![];
     for column in table.data_columns.iter() {
         data_columns.push(generate_table_field_token_stream(column)?);
@@ -69,7 +104,8 @@ pub(crate) fn generate_diesel_table(
         diesel::table! {
             #table_name (#id_column_ident) {
                 #id_column,
-                #(#data_columns),*
+                #(#data_columns,)*
+                #last_sync_at_column,
             }
         }
     }
@@ -104,5 +140,24 @@ mod tests {
         let result = rust_type_to_diesel_type(&ty);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().to_string(), "Type cannot be processed");
+    }
+
+    #[test]
+    fn test_rust_type_to_diesel_type_chrono_naive_datetime() {
+        let ty: Type = parse_quote!(carburetor::chrono::NaiveDateTime);
+        let result = rust_type_to_diesel_type(&ty).unwrap();
+        let expected = quote!(Timestamp);
+        assert_eq!(result.to_string(), expected.to_string());
+    }
+
+    #[test]
+    fn test_rust_type_to_diesel_type_chrono_not_supported() {
+        let ty: Type = parse_quote!(carburetor::chrono::Unavailable);
+        let result = rust_type_to_diesel_type(&ty);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Only NaiveDateTime, DateTime, NaiveDate and NaiveTime is supported for chrono"
+        );
     }
 }

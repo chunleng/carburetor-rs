@@ -13,5 +13,5 @@ proc-macro2 = { workspace = true }
 
 [dev-dependencies]
 carburetor = { workspace = true }
-diesel = { workspace = true, features = ["postgres"] }
+diesel = { workspace = true, features = ["postgres", "chrono"] }
 trybuild = { workspace = true }

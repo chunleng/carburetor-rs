@@ -11,6 +11,7 @@ pub struct Game {
     #[id]
     pub match_id: String,
     pub score: i32,
+    pub match_date: carburetor::chrono::NaiveDate,
 }
 
 fn main() {

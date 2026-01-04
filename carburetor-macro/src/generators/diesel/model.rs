@@ -30,7 +30,9 @@ pub(crate) fn generate_diesel_models(table: &TableDetail, config: &CarburetorArg
     let update_name = Ident::new(&format!("Update{}", table.ident), table.ident.span());
     let table_name = &config.table_name;
 
-    let id_column = generate_model_field_token_stream(&table.id_column);
+    let id_column = generate_model_field_token_stream(&table.sync_metadata_columns.id);
+    let last_sync_at_column =
+        generate_model_field_token_stream(&table.sync_metadata_columns.last_sync_at);
     let data_columns: Vec<_> = table
         .data_columns
         .iter()
@@ -48,14 +50,16 @@ pub(crate) fn generate_diesel_models(table: &TableDetail, config: &CarburetorArg
         #[diesel(check_for_backend(diesel::pg::Pg))]
         #vis struct #name {
             #id_column,
-            #(#data_columns),*
+            #(#data_columns,)*
+            #last_sync_at_column,
         }
         #[derive(Debug, Clone, diesel::AsChangeset)]
         #[diesel(table_name = #table_name)]
         #[diesel(check_for_backend(diesel::pg::Pg))]
         #vis struct #update_name {
             #id_column,
-            #(#changeset_data_columns),*
+            #(#changeset_data_columns,)*
+            #last_sync_at_column,
         }
     }
     .into()

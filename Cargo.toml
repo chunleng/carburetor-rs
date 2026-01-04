@@ -12,6 +12,7 @@ proc-macro2 = "1.0"
 diesel = "2.2"
 trybuild = "1.0"
 tokio = "1.49"
+chrono = "0.4"
 
 [package]
 name = "carburetor-example"
@@ -20,8 +21,9 @@ edition = "2024"
 
 [dependencies]
 carburetor = { workspace = true }
-diesel = { workspace = true, features = ["postgres"] }
+diesel = { workspace = true, features = ["postgres", "chrono"] }
 tokio = { workspace = true, features = ["full"] }
+chrono = { workspace = true }
 
 [[example]]
 name = "simple-backend"
