@@ -13,6 +13,6 @@ pub enum Error {
     Unhandled {
         message: String,
         #[source]
-        source: Box<dyn std::error::Error>,
+        source: anyhow::Error,
     },
 }
