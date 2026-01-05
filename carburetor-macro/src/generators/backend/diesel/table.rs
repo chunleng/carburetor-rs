@@ -86,8 +86,8 @@ fn generate_table_field_token_stream(col: &DataColumn) -> Result<TokenStream2> {
 }
 
 pub(crate) fn generate_diesel_table(
-    table: &TableDetail,
     config: &CarburetorArgs,
+    table: &TableDetail,
 ) -> Result<TokenStream2> {
     let table_name = &config.table_name;
 

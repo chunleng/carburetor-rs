@@ -1,3 +1,6 @@
+#[cfg(feature = "backend")]
+pub mod backend;
+
 pub mod config;
 pub mod error;
 

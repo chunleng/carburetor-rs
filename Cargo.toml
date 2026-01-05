@@ -29,3 +29,7 @@ chrono = { workspace = true }
 [[example]]
 name = "simple-backend"
 path = "examples/simple_backend.rs"
+
+[features]
+default = []
+backend = ["carburetor/backend"]

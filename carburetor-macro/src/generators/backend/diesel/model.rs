@@ -24,7 +24,7 @@ fn generate_changset_model_field_token_stream(col: &DataColumn) -> TokenStream2 
     }
 }
 
-pub(crate) fn generate_diesel_models(table: &TableDetail, config: &CarburetorArgs) -> TokenStream2 {
+pub(crate) fn generate_diesel_models(config: &CarburetorArgs, table: &TableDetail) -> TokenStream2 {
     let vis = &table.vis;
     let name = &table.ident;
     let update_name = Ident::new(&format!("Update{}", table.ident), table.ident.span());

@@ -15,3 +15,7 @@ proc-macro2 = { workspace = true }
 carburetor = { workspace = true }
 diesel = { workspace = true, features = ["postgres", "chrono"] }
 trybuild = { workspace = true }
+
+[features]
+default = []
+backend = ["carburetor/backend"]

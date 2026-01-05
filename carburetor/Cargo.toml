@@ -7,3 +7,7 @@ edition = "2024"
 carburetor-macro = { workspace = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
+
+[features]
+default = []
+backend = ["carburetor-macro/backend"]
