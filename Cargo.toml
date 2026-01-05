@@ -13,6 +13,7 @@ diesel = "2.2"
 trybuild = "1.0"
 tokio = "1.49"
 chrono = "0.4"
+thiserror = "2.0"
 
 [package]
 name = "carburetor-example"

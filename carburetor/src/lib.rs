@@ -1,3 +1,6 @@
+pub mod config;
+pub mod error;
+
 // Re-export chrono so that user can use Chrono type for model without adding to their dependencies
 pub mod chrono {
     use chrono::{DateTime, Utc};
