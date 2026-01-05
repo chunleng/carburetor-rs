@@ -7,8 +7,12 @@ edition = "2024"
 carburetor-macro = { workspace = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
+diesel = { workspace = true, optional = true, features = [
+    "postgres",
+    "chrono",
+] }
 anyhow = { workspace = true }
 
 [features]
-default = []
+default = ["dep:diesel"]
 backend = ["carburetor-macro/backend"]

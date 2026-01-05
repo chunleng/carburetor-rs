@@ -1,6 +1,4 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
-use carburetor::{carburetor, chrono::NaiveDate};
+use carburetor::{carburetor, chrono::NaiveDate, config::initialize_carburetor_global_config};
 use chrono::Utc;
 use diesel::{RunQueryDsl, prelude::*, update};
 
@@ -17,6 +15,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|_| "postgres://postgres:password@localhost:5432/".to_string());
     let mut connection =
         PgConnection::establish(&database_url).expect("Error connecting to database");
+    initialize_carburetor_global_config(carburetor::config::CarburetorGlobalConfig {
+        database_url,
+    });
 
     diesel::sql_query("DROP TABLE IF EXISTS users").execute(&mut connection)?;
     diesel::sql_query(
@@ -30,11 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .execute(&mut connection)?;
 
-    let id = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_millis()
-        .to_string();
+    let id = "USER1".to_string();
     User {
         id: id.clone(),
         username: "example_user123".to_string(),
@@ -45,13 +42,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .insert_into(users::table)
     .execute(&mut connection)
     .unwrap();
+    User {
+        id: "USER2".to_string(),
+        username: "example_user123".to_string(),
+        first_name: None,
+        joined_on: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+        last_sync_at: Utc::now(),
+    }
+    .insert_into(users::table)
+    .execute(&mut connection)
+    .unwrap();
 
-    println!("Before Update:");
-    dbg!(
-        users::table
-            .select(User::as_select())
-            .load(&mut connection)?
-    );
+    println!("Before Update: Both Users are printed");
+    let res = dbg!(download_users_data(None)?);
 
     // As UpdateUser is a Changeset, Any None column will be left untouched
     let update_user = UpdateUser {
@@ -67,12 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .execute(&mut connection)?
     );
 
-    println!("After Update:");
-    dbg!(
-        users::table
-            .select(User::as_select())
-            .load(&mut connection)
-            .unwrap()
-    );
+    println!("After Update: Only User 1 has update and is printed");
+    let _ = dbg!(download_users_data(Some(res.last_sync_at))?);
     Ok(())
 }

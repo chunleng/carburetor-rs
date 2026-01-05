@@ -12,7 +12,7 @@ quote = { workspace = true }
 proc-macro2 = { workspace = true }
 
 [dev-dependencies]
-carburetor = { workspace = true }
+carburetor = { workspace = true, features = ["backend"] }
 diesel = { workspace = true, features = ["postgres", "chrono"] }
 trybuild = { workspace = true }
 

@@ -54,6 +54,7 @@ dependencies = [
  "anyhow",
  "carburetor-macro",
  "chrono",
+ "diesel",
  "thiserror",
 ]
 

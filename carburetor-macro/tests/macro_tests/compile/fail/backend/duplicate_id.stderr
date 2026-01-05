@@ -768,3 +768,45 @@ error[E0062]: field `id` specified more than once
   | |
   | used more than once
   | first use of `id`
+
+error[E0283]: type annotations needed
+ --> tests/macro_tests/compile/fail/backend/duplicate_id.rs:3:1
+  |
+3 | #[carburetor(table_name = "users")]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot infer type
+  |
+  = note: multiple `impl`s satisfying `_: MixedAggregates<diesel::expression::is_aggregate::No>` found in the `diesel` crate:
+          - impl MixedAggregates<diesel::expression::is_aggregate::No> for diesel::expression::is_aggregate::No;
+          - impl<T> MixedAggregates<T> for diesel::expression::is_aggregate::Never;
+  = note: required for `(columns::id, columns::username, columns::email, columns::last_sync_at)` to implement `ValidGrouping<()>`
+  = note: 2 redundant requirements hidden
+  = note: required for `diesel::expression::select_by::SelectBy<User, Pg>` to implement `ValidGrouping<()>`
+  = note: required for `SelectStatement<FromClause<table>>` to implement `SelectDsl<diesel::expression::select_by::SelectBy<User, Pg>>`
+  = note: this error originates in the attribute macro `carburetor` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0283]: type annotations needed
+ --> tests/macro_tests/compile/fail/backend/duplicate_id.rs:3:1
+  |
+3 | #[carburetor(table_name = "users")]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot infer type
+  |
+  = note: multiple `impl`s satisfying `String: FromSql<_, Pg>` found in the `diesel` crate:
+          - impl FromSql<Citext, Pg> for String;
+          - impl<ST, DB> FromSql<ST, DB> for String
+            where DB: Backend, *const str: FromSql<ST, DB>, *const str: ?Sized;
+  = note: required for `String` to implement `Queryable<_, Pg>`
+  = note: required for `String` to implement `FromSqlRow<_, Pg>`
+  = note: required for `(String, String, String, String, DateTime<Utc>)` to implement `FromStaticSqlRow<(_, _, diesel::sql_types::Text, diesel::sql_types::Text, diesel::sql_types::Timestamptz), Pg>`
+  = note: 2 redundant requirements hidden
+  = note: required for `User` to implement `FromSqlRow<(_, _, diesel::sql_types::Text, diesel::sql_types::Text, diesel::sql_types::Timestamptz), Pg>`
+  = note: required for `diesel::expression::select_by::SelectBy<User, Pg>` to implement `load_dsl::private::CompatibleType<User, Pg>`
+  = note: required for `BoxedSelectStatement<'_, diesel::expression::select_by::SelectBy<User, Pg>, FromClause<table>, Pg>` to implement `LoadQuery<'_, PgConnection, User>`
+note: required by a bound in `diesel::RunQueryDsl::load`
+ --> $CARGO/diesel-$VERSION/src/query_dsl/mod.rs
+  |
+  |     fn load<'query, U>(self, conn: &mut Conn) -> QueryResult<Vec<U>>
+  |        ---- required by a bound in this associated function
+  |     where
+  |         Self: LoadQuery<'query, Conn, U>,
+  |               ^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `RunQueryDsl::load`
+  = note: this error originates in the attribute macro `carburetor` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -18,7 +18,9 @@ fn main() {
     let _ = users::table;
     let _ = std::any::TypeId::of::<User>();
     let _ = std::any::TypeId::of::<UpdateUser>();
+    let _ = download_users_data;
     let _ = games::table;
     let _ = std::any::TypeId::of::<Game>();
     let _ = std::any::TypeId::of::<UpdateGame>();
+    let _ = download_games_data;
 }
