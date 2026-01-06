@@ -74,6 +74,7 @@ version = "0.1.0"
 dependencies = [
  "carburetor",
  "diesel",
+ "heck",
  "proc-macro2",
  "quote",
  "syn",

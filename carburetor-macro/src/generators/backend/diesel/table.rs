@@ -1,7 +1,4 @@
-use crate::{
-    CarburetorArgs,
-    parsers::input::{DataColumn, TableDetail},
-};
+use crate::{CarburetorTable, parsers::CarburetorColumn};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{Error, Path, PathSegment, Result, Type, TypePath};
@@ -77,35 +74,33 @@ fn rust_type_to_diesel_type(ty: &Type) -> Result<TokenStream2> {
     })
 }
 
-fn generate_table_field_token_stream(col: &DataColumn) -> Result<TokenStream2> {
+fn generate_table_field_token_stream(col: &CarburetorColumn) -> Result<TokenStream2> {
     let field_name = &col.ident;
-    let diesel_ty = rust_type_to_diesel_type(&col.ty)?;
+    let diesel_ty = rust_type_to_diesel_type(&col.model_ty)?;
     Ok(quote! {
         #field_name -> #diesel_ty
     })
 }
 
-pub(crate) fn generate_diesel_table(
-    config: &CarburetorArgs,
-    table: &TableDetail,
-) -> Result<TokenStream2> {
-    let table_name = &config.table_name;
+pub(crate) fn generate_diesel_table(table: &CarburetorTable) -> Result<TokenStream2> {
+    let table_name = table.get_table_name();
 
     let id_column_ident = &table.sync_metadata_columns.id.ident;
-    let id_column = generate_table_field_token_stream(&table.sync_metadata_columns.id)?;
-    let last_sync_at_column =
-        generate_table_field_token_stream(&table.sync_metadata_columns.last_sync_at)?;
-    let mut data_columns = vec![];
-    for column in table.data_columns.iter() {
-        data_columns.push(generate_table_field_token_stream(column)?);
-    }
+    let id_column = generate_table_field_token_stream(&*table.sync_metadata_columns.id)?;
+    let last_synced_at_column =
+        generate_table_field_token_stream(&*table.sync_metadata_columns.last_synced_at)?;
+    let data_columns = table
+        .data_columns
+        .iter()
+        .map(generate_table_field_token_stream)
+        .collect::<Result<Vec<_>>>()?;
 
     Ok(quote! {
         diesel::table! {
             #table_name (#id_column_ident) {
                 #id_column,
                 #(#data_columns,)*
-                #last_sync_at_column,
+                #last_synced_at_column,
             }
         }
     }

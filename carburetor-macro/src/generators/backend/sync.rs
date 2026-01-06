@@ -1,17 +1,14 @@
-use proc_macro2::{Ident, Span, TokenStream};
+use proc_macro2::TokenStream;
 use quote::quote;
 use syn::Result;
 
-use crate::{CarburetorArgs, TableDetail};
+use crate::CarburetorTable;
 
-pub(crate) fn generate_sync_functions(
-    args: &CarburetorArgs,
-    table: &TableDetail,
-) -> Result<TokenStream> {
-    let table_name = &args.table_name;
-    let function_name = Ident::new(&format!("download_{}_data", table_name), Span::call_site());
-    let last_synced_at_column_name = &table.sync_metadata_columns.last_sync_at.ident;
-    let select_model = &table.ident;
+pub(crate) fn generate_sync_functions(table: &CarburetorTable) -> Result<TokenStream> {
+    let table_name = table.get_table_name();
+    let function_name = table.get_download_function_name();
+    let last_synced_at_column_name = &table.sync_metadata_columns.last_synced_at.ident;
+    let select_model = &table.model_id;
 
     Ok(quote! {
         pub fn #function_name(last_synced_at: Option<carburetor::chrono::DateTimeUtc>) -> carburetor::error::Result<carburetor::backend::models::DownloadSyncResponse<#select_model>> {
@@ -29,7 +26,7 @@ pub(crate) fn generate_sync_functions(
             }
 
             Ok(carburetor::backend::models::DownloadSyncResponse {
-                last_sync_at: process_time,
+                last_synced_at: process_time,
                 data: query
                     .load(&mut conn)
                     .map_err(|e| carburetor::error::Error::Unhandled {

@@ -26,7 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             username TEXT NOT NULL,
             first_name TEXT,
             joined_on DATE,
-            last_sync_at TIMESTAMPTZ
+            last_synced_at TIMESTAMPTZ
         )",
     )
     .execute(&mut connection)?;
@@ -37,7 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         username: "example_user123".to_string(),
         first_name: None,
         joined_on: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
-        last_sync_at: Utc::now(),
+        last_synced_at: Utc::now(),
     }
     .insert_into(users::table)
     .execute(&mut connection)
@@ -47,7 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         username: "example_user123".to_string(),
         first_name: None,
         joined_on: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
-        last_sync_at: Utc::now(),
+        last_synced_at: Utc::now(),
     }
     .insert_into(users::table)
     .execute(&mut connection)
@@ -62,7 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         username: None,
         first_name: Some(Some("John".to_string())),
         joined_on: None,
-        last_sync_at: Utc::now(),
+        last_synced_at: Utc::now(),
     };
     dbg!(
         update(users::table.find(&update_user.id))
@@ -71,6 +71,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     println!("After Update: Only User 1 has update and is printed");
-    let _ = dbg!(download_users_data(Some(res.last_sync_at))?);
+    let _ = dbg!(download_users_data(Some(res.last_synced_at))?);
     Ok(())
 }

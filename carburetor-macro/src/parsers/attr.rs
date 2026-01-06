@@ -4,11 +4,12 @@ use syn::{
     punctuated::Punctuated,
 };
 
-pub(crate) struct CarburetorArgs {
-    pub(crate) table_name: Ident,
+#[derive(Debug, Clone)]
+pub(crate) struct CarburetorAttr {
+    pub(crate) table_name: Option<Ident>,
 }
 
-impl Parse for CarburetorArgs {
+impl Parse for CarburetorAttr {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut table_name = None;
 
@@ -41,11 +42,6 @@ impl Parse for CarburetorArgs {
                 }
             }
         }
-        Ok(CarburetorArgs {
-            table_name: table_name.ok_or(Error::new_spanned(
-                parsed_args,
-                "table_name arguments must be provided",
-            ))?,
-        })
+        Ok(CarburetorAttr { table_name })
     }
 }

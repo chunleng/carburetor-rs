@@ -15,6 +15,7 @@ tokio = "1.49"
 chrono = "0.4"
 thiserror = "2.0"
 anyhow = "1.0"
+heck = "0.5"
 
 [package]
 name = "carburetor-example"
