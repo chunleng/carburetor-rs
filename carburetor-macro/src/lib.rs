@@ -1,21 +1,17 @@
 mod generators;
+mod helpers;
 mod parsers;
 
 use proc_macro::TokenStream;
+use proc_macro2::TokenStream as TokenStream2;
 use syn::parse_macro_input;
 
-use crate::{
-    generators::generate_all,
-    parsers::{CarburetorTable, attr::CarburetorAttr, input::CarburetorItem},
-};
+use crate::{generators::generate_carburetor_sync_config, parsers::CarburetorSyncConfig};
 
-#[proc_macro_attribute]
-pub fn carburetor(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let attr_parsed = parse_macro_input!(attr as CarburetorAttr);
-    let item_parsed = parse_macro_input!(item as CarburetorItem);
-    let table = match CarburetorTable::new(attr_parsed, item_parsed) {
-        Ok(t) => t,
-        Err(e) => return e.to_compile_error().into(),
-    };
-    generate_all(table).unwrap_or_else(|e| e.to_compile_error().into())
+#[proc_macro]
+pub fn carburetor_sync_config(input: TokenStream) -> TokenStream {
+    let sync_group = parse_macro_input!(input as CarburetorSyncConfig);
+    let mut tokens = TokenStream2::new();
+    generate_carburetor_sync_config(&mut tokens, sync_group);
+    tokens.into()
 }

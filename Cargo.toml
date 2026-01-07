@@ -16,6 +16,8 @@ chrono = "0.4"
 thiserror = "2.0"
 anyhow = "1.0"
 heck = "0.5"
+strum = "0.27"
+derive_more = "2.1"
 
 [package]
 name = "carburetor-example"

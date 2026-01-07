@@ -1,0 +1,11 @@
+error: Table in sync group does not exist in table declaration
+  --> tests/macro_tests/compile/fail/backend/sync_non_existing_table.rs:11:19
+   |
+11 |             user, non_existent
+   |                   ^^^^^^^^^^^^
+
+error: Table in sync group does not exist in table declaration
+  --> tests/macro_tests/compile/fail/backend/sync_non_existing_table.rs:24:13
+   |
+24 |             non_existent
+   |             ^^^^^^^^^^^^

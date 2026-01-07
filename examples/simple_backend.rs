@@ -1,12 +1,20 @@
-use carburetor::{carburetor, chrono::NaiveDate, config::initialize_carburetor_global_config};
+use carburetor::{chrono::NaiveDate, config::initialize_carburetor_global_config, prelude::*};
 use chrono::Utc;
 use diesel::{RunQueryDsl, prelude::*, update};
 
-#[carburetor(table_name = "users")]
-pub struct User {
-    pub username: String,
-    pub first_name: Option<String>,
-    pub joined_on: carburetor::chrono::NaiveDate,
+carburetor_sync_config! {
+    tables {
+        user {
+            username -> Text,
+            first_name -> Nullable<Text>,
+            joined_on -> Date,
+        }
+    }
+    sync_groups {
+        all_clients {
+            user
+        }
+    }
 }
 
 #[tokio::main]
@@ -52,9 +60,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .insert_into(users::table)
     .execute(&mut connection)
     .unwrap();
-
     println!("Before Update: Both Users are printed");
-    let res = dbg!(download_users_data(None)?);
+    let res = dbg!(download_all_clients(DownloadAllClientsRequest::default())?);
 
     // As UpdateUser is a Changeset, Any None column will be left untouched
     let update_user = UpdateUser {
@@ -62,7 +69,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         username: None,
         first_name: Some(Some("John".to_string())),
         joined_on: None,
-        last_synced_at: Utc::now(),
+        last_synced_at: Some(Utc::now()),
     };
     dbg!(
         update(users::table.find(&update_user.id))
@@ -71,6 +78,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     println!("After Update: Only User 1 has update and is printed");
-    let _ = dbg!(download_users_data(Some(res.last_synced_at))?);
+    let _ = dbg!(download_all_clients(DownloadAllClientsRequest {
+        user_offset: Some(res.user.last_synced_at)
+    }));
     Ok(())
 }
