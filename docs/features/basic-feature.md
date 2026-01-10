@@ -5,9 +5,10 @@
 Carburetor is a local-first framework that enables sync between a storage
 backend and multiple frontend devices with LWW (Last Writes Win) Register.
 
-It provides sync-config feature provides a function-like proc macro
+The sync-config feature provides a function-like proc macro
 `carburetor_sync_config!` that defines table configurations and multiple sync
-groups. This enables developers to:
+groups. The same macro generates both backend code (PostgreSQL) and client code
+(SQLite) depending on the feature flag used. This enables developers to:
 
 - Define table structures once and reuse them across multiple groups
 - Create different sync groups for different applications or use cases
@@ -18,8 +19,9 @@ groups. This enables developers to:
 
 | Library/Framework/Tool | Purpose |
 |---|---|
-| Diesel | Database abstraction and ORM for PostgreSQL queries |
+| Diesel | Database abstraction and ORM for PostgreSQL (backend) and SQLite (client) |
 | PostgreSQL | Relational database backend for storing CRDT data with timestamps |
+| SQLite | Relational database for client-side local storage |
 | Proc macro (syn, quote, proc-macro2) | Code generation for parsing config and group definitions and generating outputs |
 
 ## Feature Components
@@ -37,6 +39,10 @@ tables {
         name -> Text,
         phone_number -> Text,
         note -> Nullable<Text>,
+        #[is_deleted]
+        record_deleted -> Boolean,
+        #[column_sync_metadata]
+        sync_metadata -> Jsonb,
         #[last_synced_at]
         updated_at -> Timestamptz
     }
@@ -49,12 +55,25 @@ tables {
 - table field: This is similar to PostgreSQL type in `diesel::table!`
 - column attribute
     * `#[id]` (Optional): Determine the unique sync ID of the table. Defaults to
-      `id`
+      `id` and only accepts `Text` for type.
     * `#[last_synced_at]` (Optional): Determine the time of update to the
-      server. Defaults to `last_synced_at`
+      server. Defaults to `last_synced_at` and only accepts `Timestamptz` for
+      type.
+    * `#[is_deleted]` (Optional): Marks the soft-delete flag column.
+      Records are not physically removed to preserve sync information. When
+      downloading from clean state, deleted records are filtered out. Defaults
+      to `is_deleted` and only accepts `Boolean` for type.
+    * `#[client_column_sync_metadata]` (Client-only, Optional): Marks the column
+      that stores sync metadata. This prevents incoming updates from overwriting
+      dirty columns and blocks updates with older timestamps than existing data.
+      Defaults to `column_sync_metadata` and only accepts `Jsonb` for type.
 
-**Generated outputs per table**:
+**Backend Generated Outputs** (PostgreSQL):
 - Diesel table schema definition
+- Select/insert/update models (Queryable, Insertable, AsChangeset)
+
+**Client Generated Outputs** (SQLite):
+- Diesel table schema definition (converted to SQLite-compatible data types)
 - Select/insert/update models (Queryable, Insertable, AsChangeset)
 
 ### Sync Group Definitions
@@ -71,10 +90,13 @@ sync_groups {
 }
 ```
 
+**Backend Generated Outputs**:
+- Group download function and request/response model
 
-
-**Generated outputs per group**:
-- Group download function and response model
+**Client Generated Outputs**:
+- Group sync to local SQLite database function and request/response model.
+- Group upload to server function (For dirty local changes) and request/response
+  model.
 
 ## Challenges and Considerations
 
@@ -98,6 +120,25 @@ client application must:
 - Pass the correct timestamp for each table when calling the group download
   function
 - Update each timestamp independently based on the corresponding response
+
+### Soft Deletion
+
+- Deleted records are marked with the `is_deleted` flag rather than physically removed
+- This preserves sync information and prevents re-syncing deleted items
+- When downloading with `None` offset (initial sync), deleted records are
+  automatically filtered out to reduce unnecessary data transfer
+- Subsequent incremental syncs include deleted records to properly propagate
+  deletions to the client
+- Deleted records cannot be undo to reduce complexity reasons. In such case, the
+  record should be recreated.
+
+### Client Sync Management
+
+**Column Sync Metadata**:
+- The `column_sync_metadata` field tracks per-column update timestamps and dirty flags
+- Prevents incoming updates from overwriting locally modified (dirty) columns
+- Rejects updates with older timestamps than the existing column data
+- Enables granular conflict resolution at the column level rather than row level
 
 ### Config vs Group Design Decisions
 
