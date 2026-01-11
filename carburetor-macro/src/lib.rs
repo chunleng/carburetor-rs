@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 mod generators;
 mod helpers;
 mod parsers;
@@ -7,6 +9,11 @@ use proc_macro2::TokenStream as TokenStream2;
 use syn::parse_macro_input;
 
 use crate::{generators::generate_carburetor_sync_config, parsers::CarburetorSyncConfig};
+
+#[cfg(all(not(feature = "backend"), not(feature = "client")))]
+compile_error!("Must enable either backend or client feature");
+#[cfg(all(feature = "backend", feature = "client"))]
+compile_error!("backend and client features are mutually exclusive");
 
 #[proc_macro]
 pub fn carburetor_sync_config(input: TokenStream) -> TokenStream {

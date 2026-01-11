@@ -1,10 +1,7 @@
 use derive_more::Display;
-use quote::ToTokens;
 use strum::EnumString;
 use syn::{
-    AngleBracketedGenericArguments, Error, GenericArgument, Path, PathArguments, PathSegment,
-    Result, Type,
-    parse::{Parse, ParseStream, Parser},
+    AngleBracketedGenericArguments, Error, GenericArgument, Path, PathArguments, PathSegment, Type,
 };
 
 use crate::helpers::parse_as;
@@ -21,11 +18,12 @@ pub(crate) enum DieselPostgresType {
     BigInt,
     Float,
     Double,
-    Boolean,
+    Bool,
     Timestamp,
     Timestamptz,
     Date,
     Time,
+    Jsonb,
 
     #[strum(disabled)]
     // Generic with single type
@@ -47,11 +45,12 @@ impl DieselPostgresType {
             DieselPostgresType::BigInt => "i64".to_string(),
             DieselPostgresType::Float => "f32".to_string(),
             DieselPostgresType::Double => "f64".to_string(),
-            DieselPostgresType::Boolean => "bool".to_string(),
+            DieselPostgresType::Bool => "bool".to_string(),
             DieselPostgresType::Timestamp => "carburetor::chrono::NaiveDateTime".to_string(),
             DieselPostgresType::Timestamptz => "carburetor::chrono::DateTimeUtc".to_string(),
             DieselPostgresType::Date => "carburetor::chrono::NaiveDate".to_string(),
             DieselPostgresType::Time => "carburetor::chrono::NaiveTime".to_string(),
+            DieselPostgresType::Jsonb => "carburetor::serde_json::Value".to_string(),
             DieselPostgresType::Generic1(base_ty, generic_ty) => match base_ty {
                 DieselPostgresGeneric1Type::Nullable => {
                     format!("Option<{}>", generic_ty.get_model_type_string())
@@ -59,12 +58,38 @@ impl DieselPostgresType {
             },
         }
     }
+
+    #[cfg(feature = "client")]
+    pub(crate) fn get_diesel_sqlite_string(&self) -> String {
+        match self {
+            DieselPostgresType::Text
+            | DieselPostgresType::SmallInt
+            | DieselPostgresType::Integer
+            | DieselPostgresType::BigInt
+            | DieselPostgresType::Float
+            | DieselPostgresType::Double
+            | DieselPostgresType::Bool
+            | DieselPostgresType::Timestamp
+            | DieselPostgresType::Date
+            | DieselPostgresType::Time => self.to_string(),
+            DieselPostgresType::Timestamptz => "TimestamptzSqlite".to_string(),
+            // According to https://docs.rs/diesel/latest/diesel/sql_types/struct.Jsonb.html (at
+            // the time of updating), Jsonb for SQLite is only used for internal use by SQLite
+            // only. Therefore, we are using Json until future support is possible.
+            DieselPostgresType::Jsonb => "Json".to_string(),
+            DieselPostgresType::Generic1(base_ty, generic_ty) => match base_ty {
+                DieselPostgresGeneric1Type::Nullable => {
+                    format!("Nullable<{}>", generic_ty.get_diesel_sqlite_string())
+                }
+            },
+        }
+    }
 }
 
-impl Parse for DieselPostgresType {
-    fn parse(input: ParseStream) -> Result<Self> {
+impl TryFrom<&Type> for DieselPostgresType {
+    type Error = Error;
+    fn try_from(ty: &Type) -> Result<Self, Error> {
         let error_message = "Unimplemented or Unknown Diesel PostgreSQL type";
-        let ty: Type = input.parse()?;
         if let Path {
             leading_colon: None,
             segments,
@@ -90,13 +115,13 @@ impl Parse for DieselPostgresType {
                                 .to_string()
                                 .parse()
                                 .map_err(|_| Error::new_spanned(ty, error_message))?,
-                            Box::new(DieselPostgresType::parse.parse2(ty.to_token_stream())?),
+                            Box::new(DieselPostgresType::try_from(ty)?),
                         ));
                     }
                 }
                 _ => {}
             }
-            // Use serde for safer type, as compared to match ident.to_string().as_str() which
+            // Use strum for safer type, as compared to match ident.to_string().as_str() which
             // we might forget to add when new types are added.
             return Ok(ident
                 .to_string()

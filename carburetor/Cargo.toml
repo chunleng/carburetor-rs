@@ -5,14 +5,18 @@ edition = "2024"
 
 [dependencies]
 carburetor-macro = { workspace = true }
-chrono = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
 thiserror = { workspace = true }
-diesel = { workspace = true, optional = true, features = [
-    "postgres",
-    "chrono",
-] }
+diesel = { workspace = true, features = ["chrono", "serde_json"] }
 anyhow = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 
 [features]
-default = ["dep:diesel"]
-backend = ["carburetor-macro/backend"]
+default = []
+backend = ["carburetor-macro/backend", "diesel/postgres"]
+client = [
+    "carburetor-macro/client",
+    "diesel/sqlite",
+    "diesel/returning_clauses_for_sqlite_3_35",
+]

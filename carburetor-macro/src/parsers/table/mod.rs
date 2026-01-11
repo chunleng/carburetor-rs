@@ -1,19 +1,22 @@
 pub(crate) mod column;
 pub(crate) mod postgres_type;
 
-use strum::EnumString;
+use std::{ops::Deref, rc::Rc};
 use syn::{
-    Attribute, Error, Ident, LitStr, Path, Result, Token,
+    Error, Ident, LitStr, Result, Token,
     parse::{Parse, ParseStream, Parser},
     punctuated::Punctuated,
     spanned::Spanned,
 };
 
 use crate::{
-    helpers::{parse_as, parse_path_as_ident, parse_str_as},
+    helpers::{parse_as, parse_str_as},
     parsers::{
-        syntax::block::DeclarationBlock,
-        table::column::{CarburetorColumn, IdColumn, LastSyncedAtColumn, SyncMetadataColumns},
+        syntax::{block::DeclarationBlock, content::DieselTableStyleContent},
+        table::column::{
+            CarburetorColumn, CarburetorColumnType, ClientColumnSyncMetadata, DirtyFlagColumn,
+            IdColumn, IsDeletedColumn, LastSyncedAtColumn, SyncMetadataColumns,
+        },
     },
 };
 
@@ -21,17 +24,24 @@ use crate::{
 pub(crate) struct CarburetorTable {
     pub(crate) ident: Ident,
     pub(crate) plural_ident: Ident,
-    pub(crate) data_columns: Vec<CarburetorColumn>,
+
+    /// Stores all columns (including sync_metadata_columns)
+    pub(crate) columns: Vec<Rc<CarburetorColumn>>,
+
+    /// Special columns that we need to refer to
     pub(crate) sync_metadata_columns: SyncMetadataColumns,
 }
 
 impl Parse for CarburetorTable {
     fn parse(input: ParseStream) -> Result<Self> {
         let block: DeclarationBlock = input.parse()?;
-        let columns =
-            Punctuated::<CarburetorColumn, Token![,]>::parse_terminated.parse2(block.content)?;
+        let columns = Punctuated::<DieselTableStyleContent, Token![,]>::parse_terminated
+            .parse2(block.content)?;
         let mut id_column = None;
         let mut last_synced_at_column = None;
+        let mut client_column_sync_metadata_column = None;
+        let mut is_deleted_column = None;
+        let mut dirty_flag_column = None;
         let mut plural_ident = None;
 
         for arg in block.arguments {
@@ -51,35 +61,90 @@ impl Parse for CarburetorTable {
             }
         }
 
-        let data_columns: Vec<CarburetorColumn> = columns
+        let mut columns = columns
             .into_iter()
-            .filter(|column| {
-                let mut is_data_column = true;
-                for attr in &column.attrs {
-                    match attr {
-                        CarburetorColumnAttribute::Id => {
-                            id_column = Some(IdColumn(column.clone()));
-                            is_data_column = false;
-                        }
-                        CarburetorColumnAttribute::LastSyncedAt => {
-                            last_synced_at_column = Some(LastSyncedAtColumn(column.clone()));
-                            is_data_column = false;
-                        }
+            .map(|x| CarburetorColumn::try_from(x).map(|x| Rc::new(x)))
+            .collect::<Result<Vec<_>>>()?;
+        for column in columns.iter() {
+            match column.column_type {
+                CarburetorColumnType::Id => {
+                    if id_column.is_some() {
+                        return Err(Error::new_spanned(
+                            &column.ident,
+                            "#[id] can only be marked once in a table",
+                        ));
                     }
+                    id_column = Some(IdColumn(column.clone()));
                 }
-                is_data_column
-            })
-            .collect();
+                CarburetorColumnType::LastSyncedAt => {
+                    if last_synced_at_column.is_some() {
+                        return Err(Error::new_spanned(
+                            &column.ident,
+                            "#[last_synced_at] can only be marked once in a table",
+                        ));
+                    }
+                    last_synced_at_column = Some(LastSyncedAtColumn(column.clone()));
+                }
+                CarburetorColumnType::IsDeleted => {
+                    if is_deleted_column.is_some() {
+                        return Err(Error::new_spanned(
+                            &column.ident,
+                            "#[is_deleted] can only be marked once in a table",
+                        ));
+                    }
+                    is_deleted_column = Some(IsDeletedColumn(column.clone()));
+                }
+                CarburetorColumnType::DirtyFlag => {
+                    if dirty_flag_column.is_some() {
+                        return Err(Error::new_spanned(
+                            &column.ident,
+                            "#[dirty_flag] can only be marked once in a table",
+                        ));
+                    }
+                    dirty_flag_column = Some(DirtyFlagColumn(column.clone()));
+                }
+                CarburetorColumnType::ClientColumnSyncMetadata => {
+                    if client_column_sync_metadata_column.is_some() {
+                        return Err(Error::new_spanned(
+                            &column.ident,
+                            "#[client_column_sync_metadata] can only be marked once in a table",
+                        ));
+                    }
+                    client_column_sync_metadata_column =
+                        Some(ClientColumnSyncMetadata(column.clone()));
+                }
+                CarburetorColumnType::Data => {}
+            }
+        }
 
-        let id_column = id_column.unwrap_or(IdColumn::default());
-        let last_synced_at_column = last_synced_at_column.unwrap_or(LastSyncedAtColumn::default());
+        let id_column = id_column.unwrap_or_else(|| {
+            let column = IdColumn::default();
+            columns.push(column.deref().clone());
+            column
+        });
+        let last_synced_at_column = last_synced_at_column.unwrap_or_else(|| {
+            let column = LastSyncedAtColumn::default();
+            columns.push(column.deref().clone());
+            column
+        });
+        let is_deleted_column = is_deleted_column.unwrap_or_else(|| {
+            let column = IsDeletedColumn::default();
+            columns.push(column.deref().clone());
+            column
+        });
+        let dirty_flag_column = dirty_flag_column.unwrap_or_else(|| {
+            let column = DirtyFlagColumn::default();
+            columns.push(column.deref().clone());
+            column
+        });
+        let client_column_sync_metadata_column =
+            client_column_sync_metadata_column.unwrap_or_else(|| {
+                let column = ClientColumnSyncMetadata::default();
+                columns.push(column.deref().clone());
+                column
+            });
 
-        let mut columns_ident: Vec<_> = data_columns
-            .iter()
-            .map(|x| x.ident.clone())
-            .collect::<Vec<_>>();
-        columns_ident.push(id_column.ident.clone());
-        columns_ident.push(last_synced_at_column.ident.clone());
+        let mut columns_ident: Vec<_> = columns.iter().map(|x| x.ident.clone()).collect::<Vec<_>>();
         columns_ident.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
         if let Some(duplicate_ident) = columns_ident
             .windows(2)
@@ -98,30 +163,15 @@ impl Parse for CarburetorTable {
                 block.ident.span(),
             )),
             ident: block.ident,
-            data_columns,
+            columns,
             sync_metadata_columns: SyncMetadataColumns {
                 id: id_column,
                 last_synced_at: last_synced_at_column,
+                is_deleted: is_deleted_column,
+                dirty_flag: dirty_flag_column,
+                client_column_sync_metadata: client_column_sync_metadata_column,
             },
         })
-    }
-}
-
-#[derive(Debug, Clone, EnumString, PartialEq)]
-#[strum(serialize_all = "snake_case")]
-pub(crate) enum CarburetorColumnAttribute {
-    Id,
-    LastSyncedAt,
-}
-
-impl TryFrom<Attribute> for CarburetorColumnAttribute {
-    type Error = Error;
-    fn try_from(value: Attribute) -> std::result::Result<Self, Self::Error> {
-        let error_message = "Unknown column attribute";
-        parse_path_as_ident(&parse_as::<Path>(&value.meta)?)?
-            .to_string()
-            .parse()
-            .map_err(|_| Error::new_spanned(value, error_message))
     }
 }
 
@@ -143,8 +193,8 @@ mod tests {
 
         assert_eq!(result.ident.to_string(), "policy");
         assert_eq!(result.plural_ident.to_string(), "policies");
-        assert_eq!(result.data_columns.len(), 1);
-        assert_eq!(result.data_columns[0].ident.to_string(), "name");
+        assert_eq!(result.columns.len(), 6);
+        assert_eq!(result.columns[0].ident.to_string(), "name");
         assert_eq!(result.sync_metadata_columns.id.ident.to_string(), "id");
         assert_eq!(
             result

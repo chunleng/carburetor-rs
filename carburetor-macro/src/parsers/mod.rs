@@ -2,7 +2,7 @@ pub(crate) mod sync_group;
 pub(crate) mod syntax;
 pub(crate) mod table;
 
-use std::{cell::RefCell, rc::Rc};
+use std::rc::Rc;
 
 use syn::{
     Error, Ident, Result,
@@ -18,7 +18,7 @@ use crate::parsers::{
 
 pub(crate) struct CarburetorSyncConfig {
     pub(crate) sync_groups: Vec<CarburetorSyncGroup>,
-    pub(crate) tables: Vec<Rc<RefCell<CarburetorTable>>>,
+    pub(crate) tables: Vec<Rc<CarburetorTable>>,
 }
 
 impl Parse for CarburetorSyncConfig {
@@ -41,7 +41,7 @@ impl Parse for CarburetorSyncConfig {
                     tables = Vec::<CarburetorTable>::parse_iteratively_from
                         .parse2(block.content)?
                         .into_iter()
-                        .map(|x| Rc::new(RefCell::new(x)))
+                        .map(|x| Rc::new(x))
                         .collect();
                 }
                 "sync_groups" => {
