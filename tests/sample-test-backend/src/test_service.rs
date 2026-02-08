@@ -6,9 +6,9 @@ use tarpc::server::Channel;
 pub struct TestService;
 
 impl TestService {
-    pub async fn start() {
+    pub async fn start(port: u16) {
         let mut listener = tarpc::serde_transport::tcp::listen(
-            "127.0.0.1:8080",
+            format!("127.0.0.1:{}", port),
             tarpc::tokio_serde::formats::Bincode::default,
         )
         .await

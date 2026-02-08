@@ -4,6 +4,7 @@ resolver = "2"
 members = [
     "carburetor",
     "carburetor-macro",
+    "tests/e2e-test",
     "tests/sample-test-backend",
     "tests/sample-test-core",
 ]
