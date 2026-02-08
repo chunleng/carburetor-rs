@@ -193,7 +193,7 @@ impl<'a> ToTokens for AsDownloadResponseTableModel<'a> {
         #[cfg(feature = "backend")]
         {
             attribute = quote! {
-                #[derive(Debug, Clone, diesel::Queryable, diesel::Selectable, serde::Serialize)]
+                #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, diesel::Queryable, diesel::Selectable)]
             };
             diesel_table = crate::generators::diesel::models::AsDieselTable {
                 table,
@@ -205,7 +205,7 @@ impl<'a> ToTokens for AsDownloadResponseTableModel<'a> {
         #[cfg(feature = "client")]
         {
             attribute = quote! {
-                #[derive(Debug, Clone, serde::Deserialize)]
+                #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
             };
             diesel_table = quote! {};
             from_model_to_new_table_model =
@@ -253,7 +253,7 @@ impl<'a> ToTokens for AsDownloadResponseModel<'a> {
             .collect::<Vec<_>>();
 
         tokens.extend(quote! {
-            #[derive(Debug, Clone)]
+            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
             pub struct #model_name {
                 #(#fields,)*
             }
@@ -279,7 +279,7 @@ impl<'a> ToTokens for AsDownloadRequestModel<'a> {
             .map(|x| AsRequestField(&x.reference_table))
             .collect::<Vec<_>>();
         tokens.extend(quote! {
-            #[derive(Debug, Clone, Default)]
+            #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
             pub struct #request_model_name {
                 #(#request_fields,)*
             }
