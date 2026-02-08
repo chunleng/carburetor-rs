@@ -1,0 +1,8 @@
+[package]
+name = "sample-test-backend"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+sample-test-core = { workspace = true, features = ["backend"] }
+tokio = { workspace = true, features = ["full"] }
