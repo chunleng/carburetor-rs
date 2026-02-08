@@ -1,6 +1,7 @@
 use futures::StreamExt;
 use sample_test_core::{backend_service::TestBackend, schema::all_clients};
 use tarpc::server::Channel;
+use tokio::signal::unix::{SignalKind, signal};
 
 #[derive(Debug, Clone)]
 pub struct TestService;
@@ -15,25 +16,37 @@ impl TestService {
         .unwrap();
 
         listener.config_mut().max_frame_length(usize::MAX);
+        let mut sigterm = signal(SignalKind::terminate()).expect("Failed to setup SIGTERM handler");
+        let mut sigint = signal(SignalKind::interrupt()).expect("Failed to setup SIGINT handler");
 
-        while let Some(conn) = listener.next().await {
-            let conn = match conn {
-                Ok(conn) => conn,
-                Err(e) => {
-                    eprintln!("Connection error: {}", e);
-                    continue;
+        loop {
+            tokio::select! {
+                conn = listener.next() => {
+                    let Some(conn) = conn else {
+                        break;
+                    };
+
+                    let conn = match conn {
+                        Ok(conn) => conn,
+                        Err(e) => {
+                            eprintln!("Connection error: {}", e);
+                            continue;
+                        }
+                    };
+
+                    tokio::spawn(async move {
+                        let server = tarpc::server::BaseChannel::with_defaults(conn);
+                        server
+                            .execute(Self.serve())
+                            .for_each(|response| async move {
+                                tokio::spawn(response);
+                            })
+                            .await;
+                    });
                 }
-            };
-
-            tokio::spawn(async move {
-                let server = tarpc::server::BaseChannel::with_defaults(conn);
-                server
-                    .execute(Self.serve())
-                    .for_each(|response| async move {
-                        tokio::spawn(response);
-                    })
-                    .await;
-            });
+                _ = sigterm.recv() => { break; }
+                _ = sigint.recv() => { break; }
+            }
         }
     }
 }
@@ -47,3 +60,4 @@ impl TestBackend for TestService {
         all_clients::process_download_request(request).unwrap()
     }
 }
+

@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 carburetor = { workspace = true, features = ["client"] }
+nix = { version = "0.29", features = ["signal", "process"] }
 sample-test-core = { workspace = true, features = ["client"] }
 tarpc = { workspace = true, features = ["serde-transport-bincode", "tcp"] }
 tokio = { workspace = true, features = ["full"] }

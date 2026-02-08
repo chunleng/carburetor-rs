@@ -1,3 +1,5 @@
+use nix::sys::signal::{Signal, kill};
+use nix::unistd::Pid;
 use std::net::TcpListener;
 use std::process::{Child, Command};
 use std::time::Duration;
@@ -27,8 +29,7 @@ impl TestBackendHandle {
             std::thread::sleep(Duration::from_millis(100));
         }
 
-        let _ = process.kill();
-        let _ = process.wait();
+        Self::graceful_kill(&mut process);
 
         panic!("Fail to start the TestBackend server");
     }
@@ -51,11 +52,30 @@ impl TestBackendHandle {
             .expect("Failed to get local addr")
             .port()
     }
+
+    fn graceful_kill(process: &mut Child) {
+        let pid = Pid::from_raw(process.id() as i32);
+        let _ = kill(pid, Signal::SIGTERM);
+
+        for _ in 0..50 {
+            match process.try_wait() {
+                Ok(Some(_)) => {
+                    println!("Backend process exited gracefully");
+                    return;
+                }
+                Ok(None) => std::thread::sleep(Duration::from_millis(100)),
+                Err(_) => break,
+            }
+        }
+
+        println!("Backend process didn't exit gracefully, force killing");
+        let _ = process.kill();
+        let _ = process.wait();
+    }
 }
 
 impl Drop for TestBackendHandle {
     fn drop(&mut self) {
-        let _ = self.process.kill();
-        let _ = self.process.wait();
+        Self::graceful_kill(&mut self.process);
     }
 }
