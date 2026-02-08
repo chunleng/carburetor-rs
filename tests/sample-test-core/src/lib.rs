@@ -1,3 +1,12 @@
+pub mod backend_service {
+    use crate::schema::all_clients::{DownloadRequest, DownloadResponse};
+
+    #[tarpc::service]
+    pub trait TestBackend {
+        async fn process_download_request(request: Option<DownloadRequest>) -> DownloadResponse;
+    }
+}
+
 pub mod schema {
     use carburetor::prelude::*;
 

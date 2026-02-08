@@ -4,5 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+carburetor = { workspace = true, features = ["backend"] }
+diesel = { workspace = true, features = ["postgres"] }
+futures.workspace = true
 sample-test-core = { workspace = true, features = ["backend"] }
+tarpc = { workspace = true, features = ["serde-transport-bincode", "tcp"] }
+testcontainers.workspace = true
+testcontainers-modules = { workspace = true, features = ["postgres"] }
 tokio = { workspace = true, features = ["full"] }
