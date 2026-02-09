@@ -16,7 +16,14 @@ impl TestBackendHandle {
         let port = Self::find_available_port();
 
         let mut process = Command::new("cargo")
-            .args(["run", "-p", "sample-test-backend", "--"])
+            .args([
+                "run",
+                "-p",
+                "sample-test-backend",
+                "--features",
+                "backend",
+                "--",
+            ])
             .arg(port.to_string())
             .spawn()
             .expect("Failed to start sample-test-backend");
