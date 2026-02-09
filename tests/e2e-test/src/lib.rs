@@ -1,10 +1,18 @@
+use carburetor::config::{CarburetorGlobalConfig, initialize_carburetor_global_config};
+use carburetor::helpers::get_connection;
+use diesel::{RunQueryDsl, SqliteConnection};
 use nix::sys::signal::{Signal, kill};
 use nix::unistd::Pid;
+use std::fs;
 use std::net::TcpListener;
 use std::process::{Child, Command};
+use std::sync::OnceLock;
 use std::time::Duration;
+use tempfile::TempDir;
 
 use sample_test_core::backend_service::TestBackendClient;
+
+static TEST_CLIENT_DB: OnceLock<TestClientDatabase> = OnceLock::new();
 
 pub struct TestBackendHandle {
     process: Child,
@@ -85,4 +93,75 @@ impl Drop for TestBackendHandle {
     fn drop(&mut self) {
         Self::graceful_kill(&mut self.process);
     }
+}
+
+pub struct TestClientDatabase {
+    _temp_dir: TempDir,
+}
+
+impl TestClientDatabase {
+    pub fn new() -> Self {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let database_path = temp_dir
+            .path()
+            .join("test.db")
+            .to_string_lossy()
+            .to_string();
+
+        // Only initialize if not already initialized
+        let _ = std::panic::catch_unwind(|| {
+            initialize_carburetor_global_config(CarburetorGlobalConfig {
+                database_path: database_path.clone(),
+            });
+        });
+
+        Self {
+            _temp_dir: temp_dir,
+        }
+    }
+
+    pub fn get_connection(&self) -> SqliteConnection {
+        get_connection().unwrap()
+    }
+
+    pub fn reset(&self) {
+        let db_path = self._temp_dir.path().join("test.db");
+        // Remove the database file if it exists
+        let _ = fs::remove_file(&db_path);
+
+        // Re-initialize the config to point to the (now missing) db file
+        // (This is safe because the config is already set, and get_connection uses the same path)
+        let mut conn = get_connection().unwrap();
+
+        // Recreate tables
+        diesel::sql_query(
+            "CREATE TABLE users(
+                id TEXT PRIMARY KEY,
+                username TEXT NOT NULL,
+                first_name TEXT,
+                joined_on DATE NOT NULL,
+                last_synced_at TIMESTAMPTZ,
+                is_deleted BOOLEAN NOT NULL,
+                dirty_flag TEXT,
+                column_sync_metadata JSON NOT NULL
+            )",
+        )
+        .execute(&mut conn)
+        .expect("Failed to create users table");
+
+        diesel::sql_query(
+            "CREATE TABLE carburetor_offsets(
+                table_name TEXT PRIMARY KEY,
+                cutoff_at TIMESTAMPTZ NOT NULL
+            )",
+        )
+        .execute(&mut conn)
+        .expect("Failed to create carburetor_offsets table");
+    }
+}
+
+pub fn get_clean_test_client_db() -> &'static TestClientDatabase {
+    let db = TEST_CLIENT_DB.get_or_init(|| TestClientDatabase::new());
+    db.reset();
+    db
 }
