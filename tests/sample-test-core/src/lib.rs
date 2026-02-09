@@ -1,9 +1,25 @@
 pub mod backend_service {
-    use crate::schema::all_clients::{DownloadRequest, DownloadResponse};
+    use carburetor::chrono::{DateTimeUtc, NaiveDate};
+
+    use crate::schema::all_clients::{
+        DownloadRequest, DownloadResponse, UploadRequest, UploadResponse,
+    };
 
     #[tarpc::service]
     pub trait TestBackend {
+        // Backend functions
         async fn process_download_request(request: Option<DownloadRequest>) -> DownloadResponse;
+        async fn process_upload_request(request: UploadRequest) -> UploadResponse;
+
+        // Test helper functions
+        async fn test_helper_insert_user(
+            id: String,
+            username: String,
+            first_name: Option<String>,
+            joined_on: NaiveDate,
+            last_synced_at: DateTimeUtc,
+            is_deleted: bool,
+        );
     }
 }
 

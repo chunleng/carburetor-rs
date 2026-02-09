@@ -1,6 +1,14 @@
+use carburetor::{
+    chrono::{DateTimeUtc, NaiveDate},
+    helpers::get_connection,
+};
+use diesel::{ExpressionMethods, RunQueryDsl, dsl::insert_into};
 use futures::StreamExt;
-use sample_test_core::{backend_service::TestBackend, schema::all_clients};
-use tarpc::server::Channel;
+use sample_test_core::{
+    backend_service::TestBackend,
+    schema::{self, all_clients},
+};
+use tarpc::{context::Context, server::Channel};
 use tokio::signal::unix::{SignalKind, signal};
 
 #[derive(Debug, Clone)]
@@ -54,10 +62,42 @@ impl TestService {
 impl TestBackend for TestService {
     async fn process_download_request(
         self,
-        _: tarpc::context::Context,
+        _: Context,
         request: Option<all_clients::DownloadRequest>,
     ) -> all_clients::DownloadResponse {
         all_clients::process_download_request(request).unwrap()
     }
-}
 
+    async fn process_upload_request(
+        self,
+        _: Context,
+        request: all_clients::UploadRequest,
+    ) -> all_clients::UploadResponse {
+        all_clients::process_upload_request(request).unwrap()
+    }
+
+    async fn test_helper_insert_user(
+        self,
+        _: Context,
+        id: String,
+        username: String,
+        first_name: Option<String>,
+        joined_on: NaiveDate,
+        last_synced_at: DateTimeUtc,
+        is_deleted: bool,
+    ) {
+        insert_into(schema::users::table)
+            .values((
+                schema::InsertUser {
+                    id,
+                    username,
+                    first_name,
+                    joined_on,
+                    is_deleted,
+                },
+                schema::users::last_synced_at.eq(last_synced_at),
+            ))
+            .execute(&mut get_connection().unwrap())
+            .unwrap();
+    }
+}
