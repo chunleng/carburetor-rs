@@ -33,12 +33,16 @@ mod client {
 
             tokens.extend(quote! {
                 pub fn retrieve_download_request()
-                -> carburetor::error::Result<#download_request_model_name> {
+                -> carburetor::error::Result<Option<#download_request_model_name>> {
                     let mut conn = carburetor::helpers::get_connection()?;
                     let offsets = carburetor::helpers::carburetor_offset::retrieve_offsets(&mut conn)?;
 
-                    Ok(#download_request_model_name {
-                        #(#field_assignments,)*
+                    Ok(if offsets.is_empty() {
+                        None
+                    } else {
+                        Some(#download_request_model_name {
+                            #(#field_assignments,)*
+                        })
                     })
                 }
             });
