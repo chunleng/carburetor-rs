@@ -6,6 +6,21 @@ pub mod client_sync_metadata;
 use chrono::{DateTime, Utc};
 
 #[cfg(feature = "backend")]
+pub fn get_db_utc_now(
+    conn: &mut diesel::PgConnection,
+) -> crate::error::Result<DateTime<Utc>> {
+    use diesel::RunQueryDsl;
+    use diesel::dsl::sql;
+    use diesel::sql_types::Timestamptz;
+    sql::<Timestamptz>("SELECT CURRENT_TIMESTAMP")
+        .get_result(conn)
+        .map_err(|e: diesel::result::Error| crate::error::Error::Unhandled {
+            message: "Failed to get database time".to_string(),
+            source: e.into(),
+        })
+}
+
+#[cfg(feature = "backend")]
 pub fn get_connection() -> crate::error::Result<diesel::PgConnection> {
     use crate::{config::get_carburetor_config, error::Error};
     use diesel::{Connection, PgConnection};

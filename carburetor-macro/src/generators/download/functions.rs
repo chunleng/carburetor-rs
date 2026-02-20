@@ -114,7 +114,7 @@ mod backend {
                     use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
                     let mut conn = carburetor::helpers::get_connection()?;
 
-                    let process_time = carburetor::helpers::get_utc_now();
+                    let process_time = carburetor::helpers::get_db_utc_now(&mut conn)?;
                     let mut query = #table_name::table
                         .select(#model_name::as_select())
                         .filter(#table_name::dsl::#last_synced_at_column_name.le(process_time))
