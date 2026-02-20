@@ -14,12 +14,6 @@ heck = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 derive_more = { workspace = true, features = ["display"] }
 
-[dev-dependencies]
-carburetor = { workspace = true, features = ["backend"] }
-diesel = { workspace = true, features = ["postgres", "chrono"] }
-serde = { workspace = true, features = ["derive"] }
-trybuild = { workspace = true }
-
 [features]
 default = []
 backend = []
