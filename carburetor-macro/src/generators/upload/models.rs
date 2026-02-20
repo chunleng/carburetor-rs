@@ -238,7 +238,6 @@ impl<'a> ToTokens for AsUploadUpdateTable<'a> {
                 let field_name = &x.ident;
                 let field_type = AsModelType(&x.diesel_type);
                 Some(quote! {
-                    #[serde(skip_serializing_if = "Option::is_none")]
                     pub #field_name: Option<#field_type>
                 })
             } else {
@@ -346,7 +345,6 @@ impl<'a> ToTokens for AsUploadRequest<'a> {
             let request_table_model = AsUploadRequestTable(x).get_model_name();
             let field_name = &x.reference_table.ident;
             quote! {
-                #[serde(skip_serializing_if = "Vec::is_empty")]
                 pub #field_name: Vec<#request_table_model>
             }
         });
@@ -379,7 +377,6 @@ impl<'a> ToTokens for AsUploadResponseModel<'a> {
         let fields = self.0.table_configs.iter().map(|x| {
             let field_name = &x.reference_table.ident;
             quote! {
-                #[serde(skip_serializing_if = "Vec::is_empty")]
                 pub #field_name: Vec<Result<carburetor::models::UploadTableResponseData, carburetor::models::UploadTableResponseError>>
             }
         });
