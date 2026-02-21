@@ -95,10 +95,10 @@ controlling when RPC communication with the backend occurs.
 Test orchestration manages the lifecycle of backend server processes and client
 databases for each test.
 
-**SQLite Database Management**: Tests create SQLite database files in temporary
-directories as needed for simulating clients. Each client is represented by a
-separate SQLite database file with the client schema initialized. Temporary
-directories are automatically cleaned up when tests complete.
+**SQLite Database Management**: A single SQLite client database is shared
+across the test suite as a process-level singleton. Before each test, the
+database file is deleted and the schema is recreated from scratch, providing a
+clean state without the overhead of creating new temporary directories per test.
 
 **Backend Server with PostgreSQL**: Each test starts its own PostgreSQL container
 via testcontainers-rs, ensuring a clean database state. The backend server is
@@ -147,7 +147,10 @@ configuration for database access.
 
 ### Test Isolation
 
-Each test operates on independent PostgreSQL and SQLite databases. The
-per-test PostgreSQL container ensures backend database isolation, while
-temporary directories with unique SQLite files ensure client isolation. Proper
-cleanup prevents disk space accumulation from repeated test runs.
+Each test operates on an independent PostgreSQL database via a per-test backend
+process and container. Client-side isolation is achieved by resetting the shared
+SQLite database to a clean state before each test rather than creating a
+new database file per test. Because the SQLite database is a shared singleton,
+tests must run sequentially (single-threaded) to avoid state leaking between
+concurrent tests. Proper process and container cleanup prevents resource
+accumulation from repeated test runs.
