@@ -1,8 +1,8 @@
 pub mod backend_service {
-    use carburetor::chrono::{DateTimeUtc, NaiveDate};
+    use carburetor::chrono::NaiveDate;
 
     use crate::schema::all_clients::{
-        DownloadRequest, DownloadResponse, UploadRequest, UploadResponse,
+        self, DownloadRequest, DownloadResponse, UploadRequest, UploadResponse,
     };
 
     #[tarpc::service]
@@ -17,9 +17,9 @@ pub mod backend_service {
             username: String,
             first_name: Option<String>,
             joined_on: NaiveDate,
-            last_synced_at: DateTimeUtc,
             is_deleted: bool,
         );
+        async fn test_helper_get_user(id: String) -> all_clients::DownloadUpdateUser;
     }
 }
 

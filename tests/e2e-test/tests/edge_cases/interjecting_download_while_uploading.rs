@@ -1,18 +1,13 @@
-use std::time::Duration;
-
 use diesel::{RunQueryDsl, SelectableHelper, query_dsl::methods::SelectDsl};
 use e2e_test::{TestBackendHandle, get_clean_test_client_db};
 use sample_test_core::schema::all_clients;
 use tarpc::context::current as ctx;
-use tokio::time::sleep;
 
 #[tokio::test]
 async fn test_download_between_upload_process_and_store() {
     let mut conn = get_clean_test_client_db().get_connection();
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
-
-    let before_seed = carburetor::helpers::get_utc_now();
 
     // Seed backend and client with an already-synced user
     backend
@@ -22,11 +17,16 @@ async fn test_download_between_upload_process_and_store() {
             "original".to_string(),
             Some("Original".to_string()),
             carburetor::chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
-            before_seed,
             false,
         )
         .await
         .unwrap();
+
+    let before_seed = backend
+        .test_helper_get_user(ctx(), "user-interject-1".to_string())
+        .await
+        .unwrap()
+        .last_synced_at;
 
     let synced_user = all_clients::FullUser {
         id: "user-interject-1".to_string(),
@@ -66,24 +66,15 @@ async fn test_download_between_upload_process_and_store() {
     assert!(upload_response.user[0].is_ok());
 
     // --- Interject: download before store_upload_response is called ---
-    let mut download_response = None;
-    for i in 0..3 {
-        let download_request = all_clients::retrieve_download_request().unwrap();
-        let res = backend
-            .process_download_request(ctx(), download_request)
-            .await
-            .unwrap();
-        if res.user.data.len() == 1 {
-            download_response = Some(res);
-            break;
-        }
-        if i == 2 {
-            panic!("Backend should return the updated record");
-        }
-        sleep(Duration::from_millis(100)).await;
-    }
+    let download_request = all_clients::retrieve_download_request().unwrap();
+    let download_response = backend
+        .process_download_request(ctx(), download_request)
+        .await
+        .unwrap();
+    assert_eq! {download_response.user.data.len(), 1};
+
     // Store the download — LWW must not clobber the still-dirty local state
-    all_clients::store_download_response(download_response.unwrap()).unwrap();
+    all_clients::store_download_response(download_response).unwrap();
 
     // Verify: dirty_flag is still set because store_upload_response hasn't run yet
     let users_mid: Vec<all_clients::FullUser> = all_clients::users::table

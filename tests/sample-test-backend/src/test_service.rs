@@ -1,8 +1,8 @@
 use carburetor::{
-    chrono::{DateTimeUtc, NaiveDate},
-    helpers::get_connection,
+    chrono::NaiveDate,
+    helpers::{get_connection, get_db_utc_now},
 };
-use diesel::{ExpressionMethods, RunQueryDsl, dsl::insert_into};
+use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, dsl::insert_into};
 use futures::StreamExt;
 use sample_test_core::{
     backend_service::TestBackend,
@@ -83,9 +83,10 @@ impl TestBackend for TestService {
         username: String,
         first_name: Option<String>,
         joined_on: NaiveDate,
-        last_synced_at: DateTimeUtc,
         is_deleted: bool,
     ) {
+        let mut conn = get_connection().unwrap();
+        let utc_now = get_db_utc_now(&mut conn).unwrap();
         insert_into(schema::users::table)
             .values((
                 schema::InsertUser {
@@ -95,9 +96,18 @@ impl TestBackend for TestService {
                     joined_on,
                     is_deleted,
                 },
-                schema::users::last_synced_at.eq(last_synced_at),
+                schema::users::last_synced_at.eq(utc_now),
             ))
             .execute(&mut get_connection().unwrap())
             .unwrap();
+    }
+
+    async fn test_helper_get_user(self, _: Context, id: String) -> all_clients::DownloadUpdateUser {
+        use diesel::SelectableHelper;
+        schema::users::table
+            .find(&id)
+            .select(all_clients::DownloadUpdateUser::as_select())
+            .first(&mut get_connection().unwrap())
+            .unwrap()
     }
 }

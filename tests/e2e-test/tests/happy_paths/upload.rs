@@ -145,7 +145,6 @@ async fn test_upload_with_updated_dirty_record() {
             "original_user".to_string(),
             Some("OriginalUser".to_string()),
             carburetor::chrono::NaiveDate::from_ymd_opt(2025, 7, 1).unwrap(),
-            carburetor::helpers::get_utc_now(),
             false,
         )
         .await

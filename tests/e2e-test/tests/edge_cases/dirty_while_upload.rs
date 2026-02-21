@@ -61,8 +61,6 @@ async fn test_upload_update_and_update_same_column_between_retrieve_and_store() 
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
 
-    let before_seed = carburetor::helpers::get_utc_now();
-
     // Seed backend and client with an already-synced user
     backend
         .test_helper_insert_user(
@@ -71,11 +69,16 @@ async fn test_upload_update_and_update_same_column_between_retrieve_and_store() 
             "original".to_string(),
             Some("Original".to_string()),
             carburetor::chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
-            before_seed,
             false,
         )
         .await
         .unwrap();
+
+    let before_seed = backend
+        .test_helper_get_user(ctx(), "user-edge-1".to_string())
+        .await
+        .unwrap()
+        .last_synced_at;
 
     let synced_user = all_clients::FullUser {
         id: "user-edge-1".to_string(),

@@ -1,10 +1,7 @@
-use std::time::Duration;
-
 use diesel::{QueryDsl, RunQueryDsl, SelectableHelper};
 use e2e_test::{TestBackendHandle, get_clean_test_client_db};
 use sample_test_core::schema::all_clients;
 use tarpc::context::current as ctx;
-use tokio::time::sleep;
 
 #[tokio::test]
 async fn test_upload_insert_then_download() {
@@ -40,25 +37,12 @@ async fn test_upload_insert_then_download() {
     assert_eq!(stored_users.len(), 1);
     assert_eq!(stored_users[0].dirty_flag, None);
 
-    let mut download_response = None;
-    // Looping because there might be a small delay from postgres to update the record
-    for i in 0..3 {
-        // Download from backend (backend will return the updated record)
-        let download_request = all_clients::retrieve_download_request().unwrap();
-        let res = backend
-            .process_download_request(ctx(), download_request)
-            .await
-            .unwrap();
-        if res.user.data.len() == 1 {
-            download_response = Some(res);
-            break;
-        }
-        if i == 2 {
-            panic!("Backend should return the updated record");
-        }
-        sleep(Duration::from_millis(100)).await;
-    }
-    let download_response = download_response.unwrap();
+    let download_request = all_clients::retrieve_download_request().unwrap();
+    let download_response = backend
+        .process_download_request(ctx(), download_request)
+        .await
+        .unwrap();
+    assert_eq! {download_response.user.data.len(), 1};
 
     all_clients::store_download_response(download_response).unwrap();
 
@@ -83,8 +67,6 @@ async fn test_upload_update_then_download() {
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
 
-    let before_insert = carburetor::helpers::get_utc_now();
-
     // Insert a user on the backend
     backend
         .test_helper_insert_user(
@@ -93,11 +75,16 @@ async fn test_upload_update_then_download() {
             "original_user".to_string(),
             Some("OriginalUser".to_string()),
             carburetor::chrono::NaiveDate::from_ymd_opt(2025, 9, 1).unwrap(),
-            before_insert,
             false,
         )
         .await
         .unwrap();
+
+    let before_insert = backend
+        .test_helper_get_user(ctx(), "user-sync-2".to_string())
+        .await
+        .unwrap()
+        .last_synced_at;
 
     // Seed the client with the user as if it was already downloaded (record + offset)
     let synced_user = all_clients::FullUser {
@@ -140,30 +127,12 @@ async fn test_upload_update_then_download() {
 
     all_clients::store_upload_response(upload_cutoff, upload_response).unwrap();
 
-    let mut download_response = None;
-    // Looping because there might be a small delay from postgres to update the record
-    for i in 0..3 {
-        // Download from backend (backend will return the updated record)
-        let download_request = all_clients::retrieve_download_request().unwrap();
-        let res = backend
-            .process_download_request(ctx(), download_request)
-            .await
-            .unwrap();
-        if res.user.data.len() == 1 {
-            download_response = Some(res);
-            break;
-        }
-        if i == 2 {
-            match &res.user.data[0] {
-                carburetor::models::DownloadTableResponseData::Update(update_data) => {
-                    assert_eq!(update_data.id, updated_user.id);
-                }
-            }
-            panic!("Backend should return the updated record");
-        }
-        sleep(Duration::from_millis(100)).await;
-    }
-    let download_response = download_response.unwrap();
+    let download_request = all_clients::retrieve_download_request().unwrap();
+    let download_response = backend
+        .process_download_request(ctx(), download_request)
+        .await
+        .unwrap();
+    assert_eq! {download_response.user.data.len(), 1};
 
     all_clients::store_download_response(download_response).unwrap();
 

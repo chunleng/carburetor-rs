@@ -1,4 +1,4 @@
-use carburetor::{chrono::NaiveDate, helpers::get_utc_now};
+use carburetor::chrono::NaiveDate;
 use diesel::{RunQueryDsl, SelectableHelper, query_dsl::methods::SelectDsl};
 use e2e_test::{TestBackendHandle, get_clean_test_client_db};
 use sample_test_core::{backend_service::TestBackendClient, schema::all_clients};
@@ -12,7 +12,6 @@ async fn insert_dummy_user(backend: &TestBackendClient, id: &str, is_deleted: bo
             "username".to_string(),
             None,
             NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
-            get_utc_now(),
             is_deleted,
         )
         .await

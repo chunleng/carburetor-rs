@@ -66,7 +66,6 @@ async fn test_upload_insert_record_already_exists_on_backend() {
             "existing_user".to_string(),
             Some("Existing".to_string()),
             carburetor::chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
-            carburetor::helpers::get_utc_now(),
             false,
         )
         .await
