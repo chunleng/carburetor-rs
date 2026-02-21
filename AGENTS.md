@@ -31,7 +31,11 @@ carburetor-rs/
 ├── docs/
 │   └── features/
 │       └── basic-feature.md     # Core feature documentation
-└── examples/                    # Usage demos (simple-backend, simple-client)
+├── examples/                    # Usage demos (simple-backend, simple-client)
+└── tests/
+    ├── e2e-test/                # E2E test suite (client feature, tarpc RPC client)
+    ├── sample-test-backend/     # Standalone backend binary for E2E tests (tarpc RPC server)
+    └── sample-test-core/        # Shared schema crate (supports both backend/client features)
 ```
 
 ## Module Details
@@ -74,11 +78,11 @@ Clients work offline using generated per-table functions: `insert_<table>()`,
 ## Commands
 
 ```bash
-# Testing (backend)
-cargo test --package carburetor-macro --features=backend
-
-# Note: Client tests currently don't work due to trybuild's limitations with
-# conditional compilation. This will be addressed in a future update.
+# Testing e2e
+# Note: Tests share a single SQLite DB singleton; --test-threads=1 is required
+# Note: Build sample-test-backend first so that it won't spend too much time
+#       launching the server and cause test to fail
+cargo build -p sample-test-backend --features=backend && cargo test -p e2e-test --features=client -- --test-threads=1
 
 # Building & Running - Backend
 cargo check --features backend
@@ -131,8 +135,10 @@ key relationships might be temporarily broken during download.
 
 ## Documentation
 
-- [Basic Feature Guide](docs/features/basic-feature.md) - Core concepts, table
-  configuration, sync groups, and design decisions
+- @docs/features/basic-feature.md - Core concepts, table configuration, sync
+  groups, and design decisions
+- @docs/development/e2e-testing.md - Test infrastructure, tarpc RPC
+  architecture, and test isolation
 
 ## Guidelines
 
@@ -144,14 +150,18 @@ key relationships might be temporarily broken during download.
 
 ### Testing
 
-- Backend tests use trybuild for compile-time verification
-- Test both successful compilation and expected compile errors
+- E2E tests use a tarpc RPC backend server + testcontainers PostgreSQL for isolated integration testing
+The shared SQLite singleton requires sequential test execution (`--test-threads=1`)
 - Examples serve as integration tests for end-to-end functionality
 
-### Adding New Features
+### Development Flow
+
+When developing to add new features or resolve issues with the codebase:
 
 1. Update parsers if new syntax is needed
-2. Add generators for new code output
-3. Update both backend and client generators if feature affects both
-4. Add trybuild tests for new macro syntax
-5. Update documentation in `docs/features/`
+2. Update generators for new code output
+3. Note that both backend and client feature should individually compile and
+   error free
+4. Utilize carburetor helpers to reduce code generation
+5. Update test case in `tests/e2e-test/`
+6. Update documentation in `docs/features/`
