@@ -55,6 +55,7 @@ impl TestDatabase {
                 username TEXT NOT NULL,
                 first_name TEXT,
                 joined_on DATE,
+                created_at TIMESTAMPTZ NOT NULL,
                 last_synced_at TIMESTAMPTZ,
                 is_deleted BOOLEAN
             )",

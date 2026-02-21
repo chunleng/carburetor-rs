@@ -148,6 +148,7 @@ impl<'a> ToTokens for AsLocalUpdateModel<'a> {
                 })
             } else if x.column_type == CarburetorColumnType::Data
                 && x.mod_on_backend_only_config == BackendOnlyConfig::Disabled
+                && !x.is_immutable
             {
                 let field_name = &x.ident;
                 let field_type = AsModelType(&x.diesel_type);
@@ -196,9 +197,10 @@ impl<'a> ToTokens for AsLocalUpdateToChangeset<'a> {
                     &x.column_type,
                     &x.client_only_config,
                     &x.mod_on_backend_only_config,
+                    &x.is_immutable,
                 ) {
-                    (&CarburetorColumnType::Id, _, _)
-                    | (&CarburetorColumnType::Data, _, &BackendOnlyConfig::Disabled) => {
+                    (&CarburetorColumnType::Id, _, _, _)
+                    | (&CarburetorColumnType::Data, _, &BackendOnlyConfig::Disabled, false) => {
                         let field_name = &x.ident;
                         Some(quote! {
                             #field_name: value.#field_name

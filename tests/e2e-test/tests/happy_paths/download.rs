@@ -12,6 +12,7 @@ async fn insert_dummy_user(backend: &TestBackendClient, id: &str, is_deleted: bo
             "username".to_string(),
             None,
             NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+            carburetor::helpers::get_utc_now(),
             is_deleted,
         )
         .await

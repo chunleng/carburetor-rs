@@ -25,6 +25,7 @@ pub(crate) struct CarburetorColumn {
     pub(crate) client_only_config: ClientOnlyConfig,
     pub(crate) mod_on_backend_only_config: BackendOnlyConfig,
     pub(crate) column_type: CarburetorColumnType,
+    pub(crate) is_immutable: bool,
 }
 
 impl TryFrom<DieselTableStyleContent> for CarburetorColumn {
@@ -35,6 +36,7 @@ impl TryFrom<DieselTableStyleContent> for CarburetorColumn {
         let mut column_type = CarburetorColumnType::default();
         let mut client_only = ClientOnlyConfig::default();
         let mut backend_mod = BackendOnlyConfig::default();
+        let mut is_immutable = false;
 
         for attr in value.attrs.iter() {
             let ident: Ident = parse_quote! {#attr};
@@ -111,8 +113,17 @@ impl TryFrom<DieselTableStyleContent> for CarburetorColumn {
                     };
                     column_type = CarburetorColumnType::DirtyFlag;
                 }
+                "immutable" => {
+                    is_immutable = true;
+                }
                 _ => {}
             }
+        }
+        if is_immutable && column_type != CarburetorColumnType::Data {
+            return Err(Error::new_spanned(
+                value.name,
+                "#[immutable] can only be applied to non-special data columns",
+            ));
         }
         Ok(CarburetorColumn {
             ident: value.name,
@@ -120,6 +131,7 @@ impl TryFrom<DieselTableStyleContent> for CarburetorColumn {
             client_only_config: client_only,
             mod_on_backend_only_config: backend_mod,
             column_type,
+            is_immutable,
         })
     }
 }
@@ -175,6 +187,7 @@ impl Default for IdColumn {
             column_type: CarburetorColumnType::Id,
             client_only_config: ClientOnlyConfig::Disabled,
             mod_on_backend_only_config: BackendOnlyConfig::Disabled,
+            is_immutable: true,
         }))
     }
 }
@@ -197,6 +210,7 @@ impl Default for LastSyncedAtColumn {
             column_type: CarburetorColumnType::LastSyncedAt,
             client_only_config: ClientOnlyConfig::Disabled,
             mod_on_backend_only_config: BackendOnlyConfig::BySqlUtcNow,
+            is_immutable: false,
         }))
     }
 }
@@ -219,6 +233,7 @@ impl Default for IsDeletedColumn {
             column_type: CarburetorColumnType::IsDeleted,
             client_only_config: ClientOnlyConfig::Disabled,
             mod_on_backend_only_config: BackendOnlyConfig::Disabled,
+            is_immutable: false,
         }))
     }
 }
@@ -246,6 +261,7 @@ impl Default for DirtyFlagColumn {
                 default_value: quote!(None),
             },
             mod_on_backend_only_config: BackendOnlyConfig::Disabled,
+            is_immutable: false,
         }))
     }
 }
@@ -270,6 +286,7 @@ impl Default for ClientColumnSyncMetadata {
                 default_value: quote!(carburetor::serde_json::from_str("{}").unwrap()),
             },
             mod_on_backend_only_config: BackendOnlyConfig::Disabled,
+            is_immutable: false,
         }))
     }
 }

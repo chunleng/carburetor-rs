@@ -12,6 +12,7 @@ async fn test_insert_user() {
         username: "test_username".to_string(),
         first_name: Some("John".to_string()),
         joined_on: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+        created_at: carburetor::helpers::get_utc_now(),
     })
     .unwrap();
 
@@ -81,6 +82,7 @@ async fn test_active_users() {
         username: "active_user".to_string(),
         first_name: Some("Alice".to_string()),
         joined_on: NaiveDate::from_ymd_opt(2025, 3, 1).unwrap(),
+        created_at: carburetor::helpers::get_utc_now(),
         id: "user-active-1".to_string(),
         last_synced_at: None,
         is_deleted: false,
@@ -91,6 +93,7 @@ async fn test_active_users() {
         username: "deleted_user".to_string(),
         first_name: Some("Bob".to_string()),
         joined_on: NaiveDate::from_ymd_opt(2025, 4, 1).unwrap(),
+        created_at: carburetor::helpers::get_utc_now(),
         id: "user-deleted-1".to_string(),
         last_synced_at: None,
         is_deleted: true,
@@ -126,6 +129,7 @@ async fn test_delete_user() {
         username: "test_username".to_string(),
         first_name: Some("John".to_string()),
         joined_on: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+        created_at: carburetor::helpers::get_utc_now(),
         id: "user-test-123".to_string(),
         last_synced_at: None,
         is_deleted: false,
@@ -169,6 +173,7 @@ async fn test_update_user() {
         username: "original_username".to_string(),
         first_name: Some("John".to_string()),
         joined_on: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+        created_at: carburetor::helpers::get_utc_now(),
         id: "user-test-456".to_string(),
         last_synced_at: None,
         is_deleted: false,

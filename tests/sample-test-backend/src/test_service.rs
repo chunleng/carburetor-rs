@@ -1,5 +1,5 @@
 use carburetor::{
-    chrono::NaiveDate,
+    chrono::{DateTimeUtc, NaiveDate},
     helpers::{get_connection, get_db_utc_now},
 };
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, dsl::insert_into};
@@ -83,6 +83,7 @@ impl TestBackend for TestService {
         username: String,
         first_name: Option<String>,
         joined_on: NaiveDate,
+        created_at: DateTimeUtc,
         is_deleted: bool,
     ) {
         let mut conn = get_connection().unwrap();
@@ -94,6 +95,7 @@ impl TestBackend for TestService {
                     username,
                     first_name,
                     joined_on,
+                    created_at,
                     is_deleted,
                 },
                 schema::users::last_synced_at.eq(utc_now),

@@ -70,6 +70,7 @@ pub mod client {
                         Some(quote!(#field_name: self.#field_name))
                     } else if x.client_only_config == ClientOnlyConfig::Disabled
                         && x.mod_on_backend_only_config == BackendOnlyConfig::Disabled
+                        && !x.is_immutable
                     {
                         let field_name = &x.ident;
                         Some(quote! {
@@ -139,7 +140,7 @@ pub mod backend {
         generators::diesel::models::{AsChangesetModel, backend::AsInsertModel},
         parsers::{
             sync_group::SyncGroupTableConfig,
-            table::column::{BackendOnlyConfig, ClientOnlyConfig},
+            table::column::{BackendOnlyConfig, CarburetorColumnType, ClientOnlyConfig},
         },
     };
 
@@ -194,7 +195,9 @@ pub mod backend {
                 .columns
                 .iter()
                 .filter_map(|x| {
-                    if x.client_only_config != ClientOnlyConfig::Disabled {
+                    if x.client_only_config != ClientOnlyConfig::Disabled
+                        || (x.column_type != CarburetorColumnType::Id && x.is_immutable)
+                    {
                         return None;
                     }
 
@@ -234,6 +237,7 @@ impl<'a> ToTokens for AsUploadUpdateTable<'a> {
                 })
             } else if x.client_only_config == ClientOnlyConfig::Disabled
                 && x.mod_on_backend_only_config == BackendOnlyConfig::Disabled
+                && !x.is_immutable
             {
                 let field_name = &x.ident;
                 let field_type = AsModelType(&x.diesel_type);

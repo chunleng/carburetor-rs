@@ -18,6 +18,7 @@ async fn test_upload_update_record_not_on_backend() {
         username: "ghost_user".to_string(),
         first_name: Some("Ghost".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+        created_at: carburetor::helpers::get_utc_now(),
         last_synced_at: None,
         is_deleted: false,
         dirty_flag: Some("update".to_string()),
@@ -66,6 +67,7 @@ async fn test_upload_insert_record_already_exists_on_backend() {
             "existing_user".to_string(),
             Some("Existing".to_string()),
             carburetor::chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+            carburetor::helpers::get_utc_now(),
             false,
         )
         .await
@@ -77,6 +79,7 @@ async fn test_upload_insert_record_already_exists_on_backend() {
         username: "existing_user".to_string(),
         first_name: Some("Existing".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+        created_at: carburetor::helpers::get_utc_now(),
         last_synced_at: None,
         is_deleted: false,
         dirty_flag: Some("insert".to_string()),

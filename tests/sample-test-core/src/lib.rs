@@ -17,6 +17,7 @@ pub mod backend_service {
             username: String,
             first_name: Option<String>,
             joined_on: NaiveDate,
+            created_at: carburetor::chrono::DateTimeUtc,
             is_deleted: bool,
         );
         async fn test_helper_get_user(id: String) -> all_clients::DownloadUpdateUser;
@@ -32,6 +33,8 @@ pub mod schema {
                 username -> Text,
                 first_name -> Nullable<Text>,
                 joined_on -> Date,
+                #[immutable]
+                created_at -> Timestamptz,
             }
         }
         sync_groups {

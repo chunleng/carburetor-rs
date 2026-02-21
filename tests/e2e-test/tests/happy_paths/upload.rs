@@ -15,6 +15,7 @@ async fn test_upload_with_no_dirty_record() {
         username: "clean_user".to_string(),
         first_name: Some("NoDirty".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 5, 1).unwrap(),
+        created_at: carburetor::helpers::get_utc_now(),
         id: "user-clean-1".to_string(),
         last_synced_at: None,
         is_deleted: false,
@@ -58,6 +59,7 @@ async fn test_upload_with_inserted_dirty_record() {
         username: "new_user".to_string(),
         first_name: Some("NewUser".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 6, 1).unwrap(),
+        created_at: carburetor::helpers::get_utc_now(),
         id: "user-insert-1".to_string(),
         last_synced_at: None,
         is_deleted: false,
@@ -145,6 +147,7 @@ async fn test_upload_with_updated_dirty_record() {
             "original_user".to_string(),
             Some("OriginalUser".to_string()),
             carburetor::chrono::NaiveDate::from_ymd_opt(2025, 7, 1).unwrap(),
+            carburetor::helpers::get_utc_now(),
             false,
         )
         .await
@@ -157,6 +160,7 @@ async fn test_upload_with_updated_dirty_record() {
         username: "updated_user".to_string(),
         first_name: Some("UpdatedUser".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 7, 1).unwrap(),
+        created_at: carburetor::helpers::get_utc_now(),
         id: "user-update-1".to_string(),
         last_synced_at: None,
         is_deleted: false,

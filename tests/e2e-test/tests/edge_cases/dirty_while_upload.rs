@@ -14,6 +14,7 @@ async fn test_upload_insert_and_update_between_retrieve_and_store() {
         username: "user_v1".to_string(),
         first_name: Some("V1".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+        created_at: carburetor::helpers::get_utc_now(),
     })
     .unwrap();
 
@@ -69,6 +70,7 @@ async fn test_upload_update_and_update_same_column_between_retrieve_and_store() 
             "original".to_string(),
             Some("Original".to_string()),
             carburetor::chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+            carburetor::helpers::get_utc_now(),
             false,
         )
         .await
@@ -85,6 +87,7 @@ async fn test_upload_update_and_update_same_column_between_retrieve_and_store() 
         username: "original".to_string(),
         first_name: Some("Original".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+        created_at: carburetor::helpers::get_utc_now(),
         last_synced_at: Some(before_seed),
         is_deleted: false,
         dirty_flag: None,
