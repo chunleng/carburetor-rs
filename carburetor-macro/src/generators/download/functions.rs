@@ -8,9 +8,7 @@ mod client {
     use quote::{ToTokens, format_ident, quote};
 
     use crate::{
-        generators::{
-            diesel::schema::AsSchemaTable, download::models::AsDownloadRequestModel,
-        },
+        generators::{diesel::schema::AsSchemaTable, download::models::AsDownloadRequestModel},
         parsers::sync_group::CarburetorSyncGroup,
     };
 
@@ -26,7 +24,9 @@ mod client {
                 .iter()
                 .map(|x| {
                     let field_name = format_ident!("{}_offset", x.reference_table.ident);
-                    let table_name_str = AsSchemaTable(&x.reference_table).get_table_name().to_string();
+                    let table_name_str = AsSchemaTable(&x.reference_table)
+                        .get_table_name()
+                        .to_string();
                     quote!(#field_name: offsets.get(#table_name_str).cloned())
                 })
                 .collect::<Vec<_>>();
@@ -52,50 +52,60 @@ mod client {
 
 #[cfg(feature = "backend")]
 mod backend {
-    use std::rc::Rc;
-
     use proc_macro2::TokenStream;
     use quote::{ToTokens, quote};
     use syn::{ExprField, Ident, Path, Type, parse_quote, parse_str};
 
     use crate::{
         generators::{
+            context::models::AsSyncContext,
             diesel::schema::AsSchemaTable,
             download::models::{
                 AsDownloadRequestModel, AsDownloadResponseModel, AsDownloadResponseTableModel,
             },
         },
-        parsers::{sync_group::CarburetorSyncGroup, table::CarburetorTable},
+        parsers::sync_group::CarburetorSyncGroup,
     };
 
-    struct AsResponseFieldValue<'a>(&'a Rc<CarburetorTable>);
+    struct AsResponseFieldValue<'a>(&'a crate::parsers::sync_group::SyncGroupTableConfig);
 
     impl<'a> ToTokens for AsResponseFieldValue<'a> {
         fn to_tokens(&self, tokens: &mut TokenStream) {
-            let table = self.0;
+            let table = &self.0.reference_table;
             let field_name = table.ident.clone();
             let function_name = parse_str::<Ident>(&format!("download_{}", &table.ident)).unwrap();
             let function_argument =
                 parse_str::<ExprField>(&format!("request.{}_offset", &table.ident)).unwrap();
 
+            let context_arg = if self.0.restrict_to.is_some() {
+                quote!(context,)
+            } else {
+                quote!()
+            };
+
             tokens.extend(quote! {
-                #field_name: #function_name(#function_argument, clean_download)?
+                #field_name: #function_name(#function_argument, clean_download, #context_arg)?
             });
         }
     }
 
-    struct AsDownloadFunction<'a>(&'a CarburetorSyncGroup, &'a CarburetorTable);
+    struct AsDownloadFunction<'a>(
+        &'a CarburetorSyncGroup,
+        &'a crate::parsers::sync_group::SyncGroupTableConfig,
+    );
 
     impl<'a> ToTokens for AsDownloadFunction<'a> {
         fn to_tokens(&self, tokens: &mut TokenStream) {
-            let table = self.1;
+            let table = &self.1.reference_table;
             let function_name = parse_str::<Ident>(&format!("download_{}", &table.ident)).unwrap();
             let model_name = AsDownloadResponseTableModel(&self.0, &table).get_model_name();
             let table_name = AsSchemaTable(table).get_table_name_with_prefix("super");
-            let last_synced_at_column_name = table.sync_metadata_columns.last_synced_at.ident.clone();
+            let last_synced_at_column_name =
+                table.sync_metadata_columns.last_synced_at.ident.clone();
             let is_deleted_column_name = table.sync_metadata_columns.is_deleted.ident.clone();
 
-            let download_sync_response: Path = parse_quote! {carburetor::models::DownloadTableResponse};
+            let download_sync_response: Path =
+                parse_quote! {carburetor::models::DownloadTableResponse};
             let download_sync_response_data: Path =
                 parse_quote! {carburetor::models::DownloadTableResponseData};
 
@@ -105,10 +115,26 @@ mod backend {
                 >
             };
 
+            let (context_param, restrict_filter) = if let Some(ref restrict) = self.1.restrict_to {
+                let context_var = parse_str::<Ident>(&restrict.context_variable).unwrap();
+                let restrict_col = &restrict.column_reference.ident;
+                (
+                    quote!(context: &SyncContext,),
+                    quote! {
+                        query = query.filter(
+                            #table_name::dsl::#restrict_col.eq(&context.#context_var)
+                        );
+                    },
+                )
+            } else {
+                (quote!(), quote!())
+            };
+
             tokens.extend(quote! {
                 fn #function_name(
                     offset: Option<carburetor::chrono::DateTimeUtc>,
-                    clean_download: bool
+                    clean_download: bool,
+                    #context_param
                 ) -> #return_type
                 {
                     use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
@@ -127,6 +153,8 @@ mod backend {
                     if clean_download {
                         query = query.filter(#table_name::dsl::#is_deleted_column_name.eq(false));
                     }
+
+                    #restrict_filter
 
                     Ok(#download_sync_response {
                         cutoff_at: process_time,
@@ -157,19 +185,28 @@ mod backend {
                 .0
                 .table_configs
                 .iter()
-                .map(|x| AsDownloadFunction(&self.0, &x.reference_table))
+                .map(|x| AsDownloadFunction(&self.0, x))
                 .collect::<Vec<_>>();
 
             let table_response_field_values = self
                 .0
                 .table_configs
                 .iter()
-                .map(|x| AsResponseFieldValue(&x.reference_table))
+                .map(|x| AsResponseFieldValue(x))
                 .collect::<Vec<_>>();
+
+            let has_context = AsSyncContext(self.0).has_context();
+            let context_param = if has_context {
+                let sync_context_name = AsSyncContext(self.0).get_model_name();
+                quote!(context: &#sync_context_name,)
+            } else {
+                quote!()
+            };
 
             token.extend(quote! {
                 pub fn #function_name(
                     request: Option<#request_model_name>,
+                    #context_param
                 ) -> carburetor::error::Result<#response_model_name> {
                     let clean_download = request.is_none();
                     let request = request.unwrap_or_default();

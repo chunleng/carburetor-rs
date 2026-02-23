@@ -1,5 +1,6 @@
 #[cfg(feature = "client")]
 pub(crate) mod client;
+pub(crate) mod context;
 pub(crate) mod diesel;
 pub(crate) mod download;
 pub(crate) mod upload;
@@ -38,6 +39,13 @@ pub(crate) fn generate_carburetor_sync_config(
             &mut mod_tokens,
             &x,
         );
+
+        #[cfg(feature = "backend")]
+        {
+            use crate::generators::context::models::generate_context_models;
+
+            generate_context_models(&mut mod_tokens, x);
+        }
 
         #[cfg(feature = "client")]
         {
