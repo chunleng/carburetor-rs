@@ -6,7 +6,6 @@ use syn::{
     Error, Ident, LitStr, Result, Token,
     parse::{Parse, ParseStream, Parser},
     punctuated::Punctuated,
-    spanned::Spanned,
 };
 
 use crate::{
@@ -50,9 +49,15 @@ impl Parse for CarburetorTable {
                     if plural_ident.is_some() {
                         return Err(Error::new_spanned(&arg.name, "Duplicate arguments found"));
                     }
+                    if arg.value.dollar_prefixed {
+                        return Err(Error::new_spanned(
+                            &arg.name,
+                            "Context variable cannot be used here",
+                        ));
+                    }
                     plural_ident = Some(parse_str_as(
-                        &parse_as::<LitStr>(&arg.value)?.value(),
-                        arg.value.span(),
+                        &parse_as::<LitStr>(&arg.value.name)?.value(),
+                        arg.name.span(),
                     )?);
                 }
                 _ => {
