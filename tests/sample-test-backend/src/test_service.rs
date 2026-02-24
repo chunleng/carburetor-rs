@@ -6,7 +6,7 @@ use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, dsl::insert_into};
 use futures::StreamExt;
 use sample_test_core::{
     backend_service::TestBackend,
-    schema::{self, all_clients},
+    schema::{self, user_only},
 };
 use tarpc::{context::Context, server::Channel};
 use tokio::signal::unix::{SignalKind, signal};
@@ -60,20 +60,20 @@ impl TestService {
 }
 
 impl TestBackend for TestService {
-    async fn process_download_request(
+    async fn process_user_only_download_request(
         self,
         _: Context,
-        request: Option<all_clients::DownloadRequest>,
-    ) -> all_clients::DownloadResponse {
-        all_clients::process_download_request(request).unwrap()
+        request: Option<user_only::DownloadRequest>,
+    ) -> user_only::DownloadResponse {
+        user_only::process_download_request(request).unwrap()
     }
 
-    async fn process_upload_request(
+    async fn process_user_only_upload_request(
         self,
         _: Context,
-        request: all_clients::UploadRequest,
-    ) -> all_clients::UploadResponse {
-        all_clients::process_upload_request(request).unwrap()
+        request: user_only::UploadRequest,
+    ) -> user_only::UploadResponse {
+        user_only::process_upload_request(request).unwrap()
     }
 
     async fn test_helper_insert_user(
@@ -104,11 +104,10 @@ impl TestBackend for TestService {
             .unwrap();
     }
 
-    async fn test_helper_get_user(self, _: Context, id: String) -> all_clients::DownloadUpdateUser {
-        use diesel::SelectableHelper;
+    async fn test_helper_get_user_last_synced_at(self, _: Context, id: String) -> DateTimeUtc {
         schema::users::table
             .find(&id)
-            .select(all_clients::DownloadUpdateUser::as_select())
+            .select(schema::users::last_synced_at)
             .first(&mut get_connection().unwrap())
             .unwrap()
     }

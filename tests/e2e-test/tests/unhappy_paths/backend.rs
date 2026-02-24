@@ -1,7 +1,7 @@
 use carburetor::models::UploadTableResponseErrorType;
 use diesel::RunQueryDsl;
 use e2e_test::{TestBackendHandle, get_clean_test_client_db};
-use sample_test_core::schema::all_clients;
+use sample_test_core::schema::user_only;
 use tarpc::context::current as ctx;
 
 #[tokio::test]
@@ -13,7 +13,7 @@ async fn test_upload_update_record_not_on_backend() {
     let dirty_at = carburetor::helpers::get_utc_now().to_rfc3339();
 
     // Insert a local record with dirty_flag = "update" but it doesn't exist on backend
-    let dirty_user = all_clients::FullUser {
+    let dirty_user = user_only::FullUser {
         id: "user-nonexistent-1".to_string(),
         username: "ghost_user".to_string(),
         first_name: Some("Ghost".to_string()),
@@ -28,16 +28,16 @@ async fn test_upload_update_record_not_on_backend() {
         ))
         .unwrap(),
     };
-    diesel::insert_into(all_clients::users::table)
+    diesel::insert_into(user_only::users::table)
         .values(&dirty_user)
         .execute(&mut conn)
         .unwrap();
 
-    let (cutoff, upload_request) = all_clients::retrieve_upload_request().unwrap();
+    let (cutoff, upload_request) = user_only::retrieve_upload_request().unwrap();
     assert_eq!(upload_request.user.len(), 1);
 
     let upload_response = backend
-        .process_upload_request(ctx(), upload_request)
+        .process_user_only_upload_request(ctx(), upload_request)
         .await
         .unwrap();
 
@@ -50,7 +50,7 @@ async fn test_upload_update_record_not_on_backend() {
         Ok(_) => panic!("Expected error for updating non-existent backend record"),
     }
 
-    all_clients::store_upload_response(cutoff, upload_response).unwrap();
+    user_only::store_upload_response(cutoff, upload_response).unwrap();
 }
 
 #[tokio::test]
@@ -74,7 +74,7 @@ async fn test_upload_insert_record_already_exists_on_backend() {
         .unwrap();
 
     // Now try to insert the same record from client
-    let dirty_user = all_clients::FullUser {
+    let dirty_user = user_only::FullUser {
         id: "user-duplicate-1".to_string(),
         username: "existing_user".to_string(),
         first_name: Some("Existing".to_string()),
@@ -89,16 +89,16 @@ async fn test_upload_insert_record_already_exists_on_backend() {
         ))
         .unwrap(),
     };
-    diesel::insert_into(all_clients::users::table)
+    diesel::insert_into(user_only::users::table)
         .values(&dirty_user)
         .execute(&mut conn)
         .unwrap();
 
-    let (cutoff, upload_request) = all_clients::retrieve_upload_request().unwrap();
+    let (cutoff, upload_request) = user_only::retrieve_upload_request().unwrap();
     assert_eq!(upload_request.user.len(), 1);
 
     let upload_response = backend
-        .process_upload_request(ctx(), upload_request)
+        .process_user_only_upload_request(ctx(), upload_request)
         .await
         .unwrap();
 
@@ -111,5 +111,5 @@ async fn test_upload_insert_record_already_exists_on_backend() {
         Ok(_) => panic!("Expected error for inserting already-existing backend record"),
     }
 
-    all_clients::store_upload_response(cutoff, upload_response).unwrap();
+    user_only::store_upload_response(cutoff, upload_response).unwrap();
 }

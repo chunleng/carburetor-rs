@@ -1,7 +1,7 @@
 use carburetor::helpers::client_sync_metadata::ClientSyncMetadata;
 use diesel::{RunQueryDsl, SelectableHelper, query_dsl::methods::SelectDsl};
 use e2e_test::{TestBackendHandle, get_clean_test_client_db};
-use sample_test_core::schema::all_clients;
+use sample_test_core::schema::user_only;
 use tarpc::context::current as ctx;
 
 #[tokio::test]
@@ -11,7 +11,7 @@ async fn test_upload_with_no_dirty_record() {
     let backend = backend_server.client().await;
 
     // Insert a clean (non-dirty) user record
-    let clean_user = all_clients::FullUser {
+    let clean_user = user_only::FullUser {
         username: "clean_user".to_string(),
         first_name: Some("NoDirty".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 5, 1).unwrap(),
@@ -22,13 +22,13 @@ async fn test_upload_with_no_dirty_record() {
         dirty_flag: None,
         column_sync_metadata: carburetor::serde_json::from_str("{}").unwrap(),
     };
-    diesel::insert_into(all_clients::users::table)
+    diesel::insert_into(user_only::users::table)
         .values(&clean_user)
         .execute(&mut conn)
         .unwrap();
 
     // Retrieve upload request
-    let (cutoff, upload_request) = all_clients::retrieve_upload_request().unwrap();
+    let (cutoff, upload_request) = user_only::retrieve_upload_request().unwrap();
     assert!(
         upload_request.user.is_empty(),
         "No dirty records should be present, even if clean records exist"
@@ -36,7 +36,7 @@ async fn test_upload_with_no_dirty_record() {
 
     // Send to backend and get response
     let upload_response = backend
-        .process_upload_request(ctx(), upload_request)
+        .process_user_only_upload_request(ctx(), upload_request)
         .await
         .unwrap();
     assert!(
@@ -45,7 +45,7 @@ async fn test_upload_with_no_dirty_record() {
     );
 
     // Store upload response (should be a no-op, but should not error)
-    all_clients::store_upload_response(cutoff, upload_response).unwrap();
+    user_only::store_upload_response(cutoff, upload_response).unwrap();
 }
 
 #[tokio::test]
@@ -55,7 +55,7 @@ async fn test_upload_with_inserted_dirty_record() {
     let backend = backend_server.client().await;
 
     // Insert a user with dirty flag set to "insert"
-    let dirty_user = all_clients::FullUser {
+    let dirty_user = user_only::FullUser {
         username: "new_user".to_string(),
         first_name: Some("NewUser".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 6, 1).unwrap(),
@@ -70,13 +70,13 @@ async fn test_upload_with_inserted_dirty_record() {
         ))
         .unwrap(),
     };
-    diesel::insert_into(all_clients::users::table)
+    diesel::insert_into(user_only::users::table)
         .values(&dirty_user)
         .execute(&mut conn)
         .unwrap();
 
     // Retrieve upload request
-    let (cutoff, upload_request) = all_clients::retrieve_upload_request().unwrap();
+    let (cutoff, upload_request) = user_only::retrieve_upload_request().unwrap();
     assert_eq!(
         upload_request.user.len(),
         1,
@@ -85,7 +85,7 @@ async fn test_upload_with_inserted_dirty_record() {
 
     // Verify the upload request contains the inserted user
     match &upload_request.user[0] {
-        all_clients::UploadRequestUser::Insert(insert_data) => {
+        user_only::UploadRequestUser::Insert(insert_data) => {
             assert_eq!(insert_data.id, dirty_user.id);
             assert_eq!(insert_data.username, "new_user");
             assert_eq!(insert_data.first_name, Some("NewUser".to_string()));
@@ -96,7 +96,7 @@ async fn test_upload_with_inserted_dirty_record() {
 
     // Send to backend and get response
     let upload_response = backend
-        .process_upload_request(ctx(), upload_request)
+        .process_user_only_upload_request(ctx(), upload_request)
         .await
         .unwrap();
     assert_eq!(
@@ -114,11 +114,11 @@ async fn test_upload_with_inserted_dirty_record() {
     }
 
     // Store upload response (should clear dirty flag)
-    all_clients::store_upload_response(cutoff, upload_response).unwrap();
+    user_only::store_upload_response(cutoff, upload_response).unwrap();
 
     // Verify dirty flag is cleared
-    let stored_users: Vec<all_clients::FullUser> = all_clients::users::table
-        .select(all_clients::FullUser::as_select())
+    let stored_users: Vec<user_only::FullUser> = user_only::users::table
+        .select(user_only::FullUser::as_select())
         .load(&mut conn)
         .unwrap();
 
@@ -128,7 +128,7 @@ async fn test_upload_with_inserted_dirty_record() {
         stored_users[0].dirty_flag, None,
         "Dirty flag should be cleared after successful upload"
     );
-    let metadata: ClientSyncMetadata<all_clients::UserSyncMetadata> =
+    let metadata: ClientSyncMetadata<user_only::UserSyncMetadata> =
         carburetor::serde_json::from_value(stored_users[0].column_sync_metadata.clone()).unwrap();
     assert_eq!(metadata.insert_time, None);
 }
@@ -156,7 +156,7 @@ async fn test_upload_with_updated_dirty_record() {
     let dirty_at = carburetor::helpers::get_utc_now().to_rfc3339();
 
     // Insert a user with dirty flag set to "update" with column-level metadata
-    let dirty_user = all_clients::FullUser {
+    let dirty_user = user_only::FullUser {
         username: "updated_user".to_string(),
         first_name: Some("UpdatedUser".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 7, 1).unwrap(),
@@ -174,13 +174,13 @@ async fn test_upload_with_updated_dirty_record() {
         ))
         .unwrap(),
     };
-    diesel::insert_into(all_clients::users::table)
+    diesel::insert_into(user_only::users::table)
         .values(&dirty_user)
         .execute(&mut conn)
         .unwrap();
 
     // Retrieve upload request
-    let (cutoff, upload_request) = all_clients::retrieve_upload_request().unwrap();
+    let (cutoff, upload_request) = user_only::retrieve_upload_request().unwrap();
     assert_eq!(
         upload_request.user.len(),
         1,
@@ -189,7 +189,7 @@ async fn test_upload_with_updated_dirty_record() {
 
     // Verify the upload request contains the updated user
     match &upload_request.user[0] {
-        all_clients::UploadRequestUser::Update(update_data) => {
+        user_only::UploadRequestUser::Update(update_data) => {
             assert_eq!(update_data.id, dirty_user.id);
             assert_eq!(update_data.username, Some("updated_user".to_string()));
             assert_eq!(
@@ -204,7 +204,7 @@ async fn test_upload_with_updated_dirty_record() {
 
     // Send to backend and get response
     let upload_response = backend
-        .process_upload_request(ctx(), upload_request)
+        .process_user_only_upload_request(ctx(), upload_request)
         .await
         .unwrap();
     assert_eq!(
@@ -222,11 +222,11 @@ async fn test_upload_with_updated_dirty_record() {
     }
 
     // Store upload response (should clear dirty flag)
-    all_clients::store_upload_response(cutoff, upload_response).unwrap();
+    user_only::store_upload_response(cutoff, upload_response).unwrap();
 
     // Verify dirty flag is cleared
-    let stored_users: Vec<all_clients::FullUser> = all_clients::users::table
-        .select(all_clients::FullUser::as_select())
+    let stored_users: Vec<user_only::FullUser> = user_only::users::table
+        .select(user_only::FullUser::as_select())
         .load(&mut conn)
         .unwrap();
 
@@ -236,7 +236,7 @@ async fn test_upload_with_updated_dirty_record() {
         stored_users[0].dirty_flag, None,
         "Dirty flag should be cleared after successful upload"
     );
-    let metadata: ClientSyncMetadata<all_clients::UserSyncMetadata> =
+    let metadata: ClientSyncMetadata<user_only::UserSyncMetadata> =
         carburetor::serde_json::from_value(stored_users[0].column_sync_metadata.clone()).unwrap();
     assert_eq!(
         metadata.clone().data.unwrap().username.unwrap().dirty_at,

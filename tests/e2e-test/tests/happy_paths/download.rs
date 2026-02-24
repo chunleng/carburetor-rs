@@ -1,7 +1,7 @@
 use carburetor::chrono::NaiveDate;
 use diesel::{RunQueryDsl, SelectableHelper, query_dsl::methods::SelectDsl};
 use e2e_test::{TestBackendHandle, get_clean_test_client_db};
-use sample_test_core::{backend_service::TestBackendClient, schema::all_clients};
+use sample_test_core::{backend_service::TestBackendClient, schema::user_only};
 use tarpc::context::current as ctx;
 
 async fn insert_dummy_user(backend: &TestBackendClient, id: &str, is_deleted: bool) {
@@ -28,20 +28,26 @@ async fn test_download_from_offset() {
 
     insert_dummy_user(&backend, "a", false).await;
 
-    let req = all_clients::retrieve_download_request().unwrap();
-    let res = backend.process_download_request(ctx(), req).await.unwrap();
+    let req = user_only::retrieve_download_request().unwrap();
+    let res = backend
+        .process_user_only_download_request(ctx(), req)
+        .await
+        .unwrap();
     assert_eq! {res.user.data.len(), 1};
-    all_clients::store_download_response(res).unwrap();
+    user_only::store_download_response(res).unwrap();
 
     insert_dummy_user(&backend, "b", false).await;
 
-    let req = all_clients::retrieve_download_request().unwrap();
-    let res = backend.process_download_request(ctx(), req).await.unwrap();
+    let req = user_only::retrieve_download_request().unwrap();
+    let res = backend
+        .process_user_only_download_request(ctx(), req)
+        .await
+        .unwrap();
     assert_eq! {res.user.data.len(), 1};
-    all_clients::store_download_response(res).unwrap();
+    user_only::store_download_response(res).unwrap();
 
-    let stored_users: Vec<all_clients::FullUser> = all_clients::users::table
-        .select(all_clients::FullUser::as_select())
+    let stored_users: Vec<user_only::FullUser> = user_only::users::table
+        .select(user_only::FullUser::as_select())
         .load(&mut conn)
         .unwrap();
 
@@ -60,12 +66,15 @@ async fn test_clean_download() {
     insert_dummy_user(&backend, "a", false).await;
     insert_dummy_user(&backend, "b", true).await;
 
-    let req = all_clients::retrieve_download_request().unwrap();
-    let res = backend.process_download_request(ctx(), req).await.unwrap();
+    let req = user_only::retrieve_download_request().unwrap();
+    let res = backend
+        .process_user_only_download_request(ctx(), req)
+        .await
+        .unwrap();
 
-    all_clients::store_download_response(res).unwrap();
-    let stored_users: Vec<all_clients::FullUser> = all_clients::users::table
-        .select(all_clients::FullUser::as_select())
+    user_only::store_download_response(res).unwrap();
+    let stored_users: Vec<user_only::FullUser> = user_only::users::table
+        .select(user_only::FullUser::as_select())
         .load(&mut conn)
         .unwrap();
 

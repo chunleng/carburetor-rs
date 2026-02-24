@@ -1,6 +1,6 @@
 use diesel::{RunQueryDsl, SelectableHelper, query_dsl::methods::SelectDsl};
 use e2e_test::{TestBackendHandle, get_clean_test_client_db};
-use sample_test_core::schema::all_clients;
+use sample_test_core::schema::user_only;
 use tarpc::context::current as ctx;
 
 #[tokio::test]
@@ -10,7 +10,7 @@ async fn test_upload_insert_and_update_between_retrieve_and_store() {
     let backend = backend_server.client().await;
 
     // Insert a user — dirty_flag="insert"
-    let inserted = all_clients::insert_user(all_clients::InsertUser {
+    let inserted = user_only::insert_user(user_only::InsertUser {
         username: "user_v1".to_string(),
         first_name: Some("V1".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
@@ -19,11 +19,11 @@ async fn test_upload_insert_and_update_between_retrieve_and_store() {
     .unwrap();
 
     // Retrieve upload request — cutoff captured here
-    let (cutoff, upload_request) = all_clients::retrieve_upload_request().unwrap();
+    let (cutoff, upload_request) = user_only::retrieve_upload_request().unwrap();
     assert_eq!(upload_request.user.len(), 1);
 
     // Update the user AFTER cutoff — simulates mutation between retrieve and store
-    all_clients::update_user(all_clients::UpdateUser {
+    user_only::update_user(user_only::UpdateUser {
         id: inserted.id.clone(),
         username: Some("user_v2".to_string()),
         first_name: None,
@@ -33,7 +33,7 @@ async fn test_upload_insert_and_update_between_retrieve_and_store() {
 
     // Send original upload request to backend (backend processes the insert)
     let upload_response = backend
-        .process_upload_request(ctx(), upload_request)
+        .process_user_only_upload_request(ctx(), upload_request)
         .await
         .unwrap();
     assert_eq!(upload_response.user.len(), 1);
@@ -41,10 +41,10 @@ async fn test_upload_insert_and_update_between_retrieve_and_store() {
 
     // Store response — insert_time clears (was before cutoff), but username dirty_at is after
     // cutoff so dirty_flag should become "update" rather than None
-    all_clients::store_upload_response(cutoff, upload_response).unwrap();
+    user_only::store_upload_response(cutoff, upload_response).unwrap();
 
-    let users: Vec<all_clients::FullUser> = all_clients::users::table
-        .select(all_clients::FullUser::as_select())
+    let users: Vec<user_only::FullUser> = user_only::users::table
+        .select(user_only::FullUser::as_select())
         .load(&mut conn)
         .unwrap();
     assert_eq!(users.len(), 1);
@@ -77,12 +77,11 @@ async fn test_upload_update_and_update_same_column_between_retrieve_and_store() 
         .unwrap();
 
     let before_seed = backend
-        .test_helper_get_user(ctx(), "user-edge-1".to_string())
+        .test_helper_get_user_last_synced_at(ctx(), "user-edge-1".to_string())
         .await
-        .unwrap()
-        .last_synced_at;
+        .unwrap();
 
-    let synced_user = all_clients::FullUser {
+    let synced_user = user_only::FullUser {
         id: "user-edge-1".to_string(),
         username: "original".to_string(),
         first_name: Some("Original".to_string()),
@@ -93,13 +92,13 @@ async fn test_upload_update_and_update_same_column_between_retrieve_and_store() 
         dirty_flag: None,
         column_sync_metadata: carburetor::serde_json::from_str("{}").unwrap(),
     };
-    diesel::insert_into(all_clients::users::table)
+    diesel::insert_into(user_only::users::table)
         .values(&synced_user)
         .execute(&mut conn)
         .unwrap();
 
     // First update — dirty_at for username = T0
-    all_clients::update_user(all_clients::UpdateUser {
+    user_only::update_user(user_only::UpdateUser {
         id: "user-edge-1".to_string(),
         username: Some("updated_v1".to_string()),
         first_name: None,
@@ -108,11 +107,11 @@ async fn test_upload_update_and_update_same_column_between_retrieve_and_store() 
     .unwrap();
 
     // Retrieve upload request — cutoff = T1 (> T0)
-    let (cutoff, upload_request) = all_clients::retrieve_upload_request().unwrap();
+    let (cutoff, upload_request) = user_only::retrieve_upload_request().unwrap();
     assert_eq!(upload_request.user.len(), 1);
 
     // Second update to same column AFTER cutoff — dirty_at for username = T2 (> T1)
-    all_clients::update_user(all_clients::UpdateUser {
+    user_only::update_user(user_only::UpdateUser {
         id: "user-edge-1".to_string(),
         username: Some("updated_v2".to_string()),
         first_name: None,
@@ -122,17 +121,17 @@ async fn test_upload_update_and_update_same_column_between_retrieve_and_store() 
 
     // Send first update to backend
     let upload_response = backend
-        .process_upload_request(ctx(), upload_request)
+        .process_user_only_upload_request(ctx(), upload_request)
         .await
         .unwrap();
     assert_eq!(upload_response.user.len(), 1);
     assert!(upload_response.user[0].is_ok());
 
     // Store response — username dirty_at T2 > cutoff T1, so it must remain dirty
-    all_clients::store_upload_response(cutoff, upload_response).unwrap();
+    user_only::store_upload_response(cutoff, upload_response).unwrap();
 
-    let users: Vec<all_clients::FullUser> = all_clients::users::table
-        .select(all_clients::FullUser::as_select())
+    let users: Vec<user_only::FullUser> = user_only::users::table
+        .select(user_only::FullUser::as_select())
         .load(&mut conn)
         .unwrap();
     assert_eq!(users.len(), 1);
