@@ -1,7 +1,12 @@
 [package]
 name = "carburetor"
-version = "0.1.0"
-edition = "2024"
+description = "Rust library for building local-first app with LWW register CRDT."
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
 
 [dependencies]
 carburetor-macro = { workspace = true }

@@ -9,6 +9,14 @@ members = [
     "tests/sample-test-core",
 ]
 
+[workspace.package]
+version = "0.1.0"
+repository = "https://github.com/chunleng/carburetor-rs"
+authors = ["ChunLeng Lim"]
+edition = "2024"
+license = "MIT"
+keywords = ["lww", "crdt", "local-first"]
+
 [workspace.dependencies]
 carburetor = { path = "carburetor", version = "0.1.0" }
 carburetor-macro = { path = "carburetor-macro", version = "0.1.0" }
@@ -37,8 +45,8 @@ tempfile = "3"
 
 [package]
 name = "carburetor-example"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
 carburetor = { workspace = true }
