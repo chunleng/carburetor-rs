@@ -6,7 +6,7 @@ use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, dsl::insert_into};
 use futures::StreamExt;
 use sample_test_core::{
     backend_service::TestBackend,
-    schema::{self, user_only},
+    schema::{self, all_clients, user_only},
 };
 use tarpc::{context::Context, server::Channel};
 use tokio::signal::unix::{SignalKind, signal};
@@ -76,6 +76,30 @@ impl TestBackend for TestService {
         user_only::process_upload_request(request).unwrap()
     }
 
+    async fn process_all_clients_download_request(
+        self,
+        _: Context,
+        request: Option<all_clients::DownloadRequest>,
+        context_user_id: String,
+    ) -> all_clients::DownloadResponse {
+        let context = all_clients::SyncContext {
+            user_id: context_user_id,
+        };
+        all_clients::process_download_request(request, &context).unwrap()
+    }
+
+    async fn process_all_clients_upload_request(
+        self,
+        _: Context,
+        request: all_clients::UploadRequest,
+        context_user_id: String,
+    ) -> all_clients::UploadResponse {
+        let context = all_clients::SyncContext {
+            user_id: context_user_id,
+        };
+        all_clients::process_upload_request(request, &context).unwrap()
+    }
+
     async fn test_helper_insert_user(
         self,
         _: Context,
@@ -99,6 +123,32 @@ impl TestBackend for TestService {
                     is_deleted,
                 },
                 schema::users::last_synced_at.eq(utc_now),
+            ))
+            .execute(&mut get_connection().unwrap())
+            .unwrap();
+    }
+
+    async fn test_helper_insert_message(
+        self,
+        _: Context,
+        id: String,
+        recipient_id: String,
+        subject: String,
+        body: String,
+        is_deleted: bool,
+    ) {
+        let mut conn = get_connection().unwrap();
+        let utc_now = get_db_utc_now(&mut conn).unwrap();
+        insert_into(schema::messages::table)
+            .values((
+                schema::InsertMessage {
+                    id,
+                    recipient_id,
+                    subject,
+                    body,
+                    is_deleted,
+                },
+                schema::messages::last_synced_at.eq(utc_now),
             ))
             .execute(&mut get_connection().unwrap())
             .unwrap();

@@ -1,7 +1,7 @@
 use carburetor::helpers::client_sync_metadata::ClientSyncMetadata;
 use diesel::{RunQueryDsl, SelectableHelper, query_dsl::methods::SelectDsl};
 use e2e_test::{TestBackendHandle, get_clean_test_client_db};
-use sample_test_core::schema::user_only;
+use sample_test_core::schema::{all_clients, user_only};
 use tarpc::context::current as ctx;
 
 #[tokio::test]
@@ -266,4 +266,120 @@ async fn test_upload_with_updated_dirty_record() {
             .column_last_synced_at
             .is_some()
     );
+}
+
+#[tokio::test]
+async fn test_upload_update_message_matching_context() {
+    let mut conn = get_clean_test_client_db().get_connection();
+
+    let backend_server = TestBackendHandle::start();
+    let backend = backend_server.client().await;
+
+    backend
+        .test_helper_insert_message(
+            ctx(),
+            "msg-update-1".to_string(),
+            "user-1".to_string(),
+            "Hello".to_string(),
+            "World".to_string(),
+            false,
+        )
+        .await
+        .unwrap();
+
+    let dirty_at = carburetor::helpers::get_utc_now().to_rfc3339();
+
+    let dirty_message = all_clients::FullMessage {
+        id: "msg-update-1".to_string(),
+        recipient_id: "user-1".to_string(),
+        subject: "Updated Subject".to_string(),
+        body: "Updated Body".to_string(),
+        last_synced_at: None,
+        is_deleted: false,
+        dirty_flag: Some("update".to_string()),
+        column_sync_metadata: carburetor::serde_json::from_str(&format!(
+            r#"{{"subject": {{"dirty_at": "{}"}}, "body": {{"dirty_at": "{}"}}}}"#,
+            dirty_at, dirty_at
+        ))
+        .unwrap(),
+    };
+    diesel::insert_into(all_clients::messages::table)
+        .values(&dirty_message)
+        .execute(&mut conn)
+        .unwrap();
+
+    let (cutoff, upload_request) = all_clients::retrieve_upload_request().unwrap();
+    assert_eq!(upload_request.message.len(), 1);
+
+    let upload_response = backend
+        .process_all_clients_upload_request(ctx(), upload_request, "user-1".to_string())
+        .await
+        .unwrap();
+
+    assert_eq!(upload_response.message.len(), 1);
+    match &upload_response.message[0] {
+        Ok(r) => assert_eq!(r.id, dirty_message.id),
+        Err(e) => panic!("Expected success, got error: {:?}", e),
+    }
+
+    all_clients::store_upload_response(cutoff, upload_response).unwrap();
+
+    let stored: Vec<all_clients::FullMessage> = all_clients::messages::table
+        .select(all_clients::FullMessage::as_select())
+        .load(&mut conn)
+        .unwrap();
+
+    assert_eq!(stored.len(), 1);
+    assert_eq!(stored[0].dirty_flag, None);
+}
+
+#[tokio::test]
+async fn test_upload_insert_message_matching_context() {
+    let mut conn = get_clean_test_client_db().get_connection();
+
+    let backend_server = TestBackendHandle::start();
+    let backend = backend_server.client().await;
+
+    let dirty_message = all_clients::FullMessage {
+        id: "msg-insert-1".to_string(),
+        recipient_id: "user-1".to_string(),
+        subject: "Hello".to_string(),
+        body: "World".to_string(),
+        last_synced_at: None,
+        is_deleted: false,
+        dirty_flag: Some("insert".to_string()),
+        column_sync_metadata: carburetor::serde_json::from_str(&format!(
+            r#"{{".insert_time": "{}"}}"#,
+            carburetor::helpers::get_utc_now().to_rfc3339()
+        ))
+        .unwrap(),
+    };
+    diesel::insert_into(all_clients::messages::table)
+        .values(&dirty_message)
+        .execute(&mut conn)
+        .unwrap();
+
+    let (cutoff, upload_request) = all_clients::retrieve_upload_request().unwrap();
+    assert_eq!(upload_request.message.len(), 1);
+
+    let upload_response = backend
+        .process_all_clients_upload_request(ctx(), upload_request, "user-1".to_string())
+        .await
+        .unwrap();
+
+    assert_eq!(upload_response.message.len(), 1);
+    match &upload_response.message[0] {
+        Ok(r) => assert_eq!(r.id, dirty_message.id),
+        Err(e) => panic!("Expected success, got error: {:?}", e),
+    }
+
+    all_clients::store_upload_response(cutoff, upload_response).unwrap();
+
+    let stored: Vec<all_clients::FullMessage> = all_clients::messages::table
+        .select(all_clients::FullMessage::as_select())
+        .load(&mut conn)
+        .unwrap();
+
+    assert_eq!(stored.len(), 1);
+    assert_eq!(stored[0].dirty_flag, None);
 }
