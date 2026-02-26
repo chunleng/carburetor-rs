@@ -32,4 +32,5 @@ pub enum UploadTableResponseErrorType {
     Unknown,
     RecordNotFound,
     RecordAlreadyExists,
+    InsufficientPermission,
 }

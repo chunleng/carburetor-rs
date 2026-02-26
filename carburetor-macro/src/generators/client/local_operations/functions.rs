@@ -80,8 +80,8 @@ impl<'a> ToTokens for AsLocalUpdateFunction<'a> {
             .iter()
             .filter_map(|x| {
                 let column_name = &x.ident;
-                match x.column_type {
-                    CarburetorColumnType::Data => Some(quote! {
+                if x.column_type == CarburetorColumnType::Data && !x.is_immutable {
+                    Some(quote! {
                         if changeset.#column_name.is_some() {
                             new_metadata
                                 .data
@@ -90,8 +90,9 @@ impl<'a> ToTokens for AsLocalUpdateFunction<'a> {
                                 .get_or_insert_default()
                                 .dirty_at = Some(carburetor::helpers::get_utc_now());
                         }
-                    }),
-                    _ => None,
+                    })
+                } else {
+                    None
                 }
             })
             .collect::<Vec<_>>();
@@ -270,4 +271,3 @@ pub fn generate_local_operation_functions(
         tokens.extend(AsActiveTableFunction(x).to_token_stream());
     })
 }
-

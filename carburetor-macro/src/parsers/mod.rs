@@ -5,7 +5,7 @@ pub(crate) mod table;
 use std::rc::Rc;
 
 use syn::{
-    Error, Ident, Result,
+    Error, Result,
     parse::{Parse, ParseStream, Parser},
     punctuated::Punctuated,
     token,
@@ -13,7 +13,9 @@ use syn::{
 use syntax::block::DeclarationBlock;
 
 use crate::parsers::{
-    sync_group::CarburetorSyncGroup, syntax::iterative::IterativeParsing, table::CarburetorTable,
+    sync_group::CarburetorSyncGroup,
+    syntax::{block::DeclarationSettingBlock, iterative::IterativeParsing},
+    table::CarburetorTable,
 };
 
 pub(crate) struct CarburetorSyncConfig {
@@ -57,7 +59,7 @@ impl Parse for CarburetorSyncConfig {
                         .map(|x| {
                             Ok(CarburetorSyncGroup::from_lookup_table_names(
                                 x.ident,
-                                &Punctuated::<Ident, token::Comma>::parse_terminated
+                                &Punctuated::<DeclarationSettingBlock, token::Comma>::parse_terminated
                                     .parse2(x.content)?
                                     .into_iter()
                                     .collect::<Vec<_>>(),

@@ -16,26 +16,32 @@ macros (`syn`, `quote`)
 
 ```
 carburetor-rs/
-├── carburetor/                  # Runtime library
+├── carburetor/                            # Runtime library
 │   └── src/
-│       ├── helpers/             # Utility modules
-│       ├── config.rs            # Config singleton
-│       ├── error.rs             # Error types
-│       ├── models.rs            # DownloadTableResponse, sync models
+│       ├── helpers/                       # Utility modules
+│       ├── config.rs                      # Config singleton
+│       ├── error.rs                       # Error types
+│       ├── models.rs                      # DownloadTableResponse, sync models
 │       └── lib.rs
-├── carburetor-macro/            # Proc macro crate
+├── carburetor-macro/                      # Proc macro crate
 │   └── src/
-│       ├── parsers/             # Input parsing
-│       ├── generators/          # Code generation
-│       └── helpers/             # Shared macro utilities
+│       ├── parsers/                       # Input parsing
+│       ├── generators/                    # Code generation
+│       └── helpers/                       # Shared macro utilities
 ├── docs/
-│   └── features/
-│       └── basic-feature.md     # Core feature documentation
-├── examples/                    # Usage demos (simple-backend, simple-client)
+│   ├── features/                          # Feature related documentation
+│   │   ├── basic-feature.md               # Core feature documentation
+│   │   └── filter-row-by-condition.md     # Documentation about filtering sync by row condition (`restrict_to`, `restrict_to_column`)
+│   └── development/                       # Development related documentation
+│       └── e2e-testing.md                 # E2E testing documentation
+├── examples/                              # Usage demos (simple-backend, simple-client)
 └── tests/
-    ├── e2e-test/                # E2E test suite (client feature, tarpc RPC client)
-    ├── sample-test-backend/     # Standalone backend binary for E2E tests (tarpc RPC server)
-    └── sample-test-core/        # Shared schema crate (supports both backend/client features)
+    ├── e2e-test/tests/                    # E2E test suite (client feature, tarpc RPC client)
+    │   ├── edge_cases/                    # Designed scenarios to test correctness in the system on cases that happens on special conditions
+    │   ├── happy_paths/                   # Tests for system working under normal situations, modules under are categorize by processes
+    │   └── unhappy_paths/                 # Tests for ensuring that error are treated
+    ├── sample-test-backend/               # Standalone backend binary for E2E tests (tarpc RPC server)
+    └── sample-test-core/                  # Shared schema crate (supports both backend/client features)
 ```
 
 ## Module Details
@@ -150,9 +156,10 @@ key relationships might be temporarily broken during download.
 
 ### Testing
 
-- E2E tests use a tarpc RPC backend server + testcontainers PostgreSQL for isolated integration testing
-The shared SQLite singleton requires sequential test execution (`--test-threads=1`)
-- Examples serve as integration tests for end-to-end functionality
+- Use tests/e2e-test to design tests for new feature added
+- E2E tests use a tarpc RPC backend server + testcontainers PostgreSQL for
+  isolated integration testing The shared SQLite singleton requires sequential
+  test execution (`--test-threads=1`)
 
 ### Development Flow
 
@@ -163,5 +170,6 @@ When developing to add new features or resolve issues with the codebase:
 3. Note that both backend and client feature should individually compile and
    error free
 4. Utilize carburetor helpers to reduce code generation
-5. Update test case in `tests/e2e-test/`
+5. Update test case in `tests/e2e-test/`, the test created should follow the
+current folder structure
 6. Update documentation in `docs/features/`

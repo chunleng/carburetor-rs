@@ -283,6 +283,13 @@ mod client {
                                     carburetor::models::UploadTableResponseErrorType::RecordNotFound => {
                                         // TODO: handle by creating the record as insert record instead
                                     }
+                                    carburetor::models::UploadTableResponseErrorType::InsufficientPermission => {
+                                        // TODO: handle by creating the record as insert record instead
+                                        //       we probably can safely assume that this is
+                                        //       happening because of update error, insert errors
+                                        //       are to be handled by the developer for mismatch
+                                        //       context between the backend and client
+                                    }
                                     carburetor::models::UploadTableResponseErrorType::Unknown => {
                                         // Nothing to do because we don't know what's happening
                                     }
@@ -342,10 +349,11 @@ mod client {
 mod backend {
     use proc_macro2::TokenStream;
     use quote::{ToTokens, format_ident, quote};
-    use syn::Ident;
+    use syn::{Ident, parse_str};
 
     use crate::{
         generators::{
+            context::models::AsSyncContext,
             diesel::{
                 models::{AsChangesetModel, AsFullModel, backend::AsInsertModel},
                 schema::AsSchemaTable,
@@ -399,10 +407,47 @@ mod backend {
                 })
                 .collect::<Vec<_>>();
 
+            let (context_param, insert_context_validation, update_context_validation) =
+                if let Some(ref restrict) = self.0.restrict_to {
+                    let context_var = parse_str::<syn::Ident>(&restrict.context_variable).unwrap();
+                    let restrict_col = &restrict.column_reference.ident;
+                    (
+                        quote!(context: &SyncContext,),
+                        quote! {
+                            if &data.#restrict_col != &context.#context_var {
+                                return Err(carburetor::models::UploadTableResponseError {
+                                    id: data.#id_column.clone(),
+                                    code: carburetor::models::UploadTableResponseErrorType::InsufficientPermission,
+                                });
+                            }
+                        },
+                        quote! {
+                            use diesel::{QueryDsl, RunQueryDsl, SelectableHelper};
+                            let existing = super::#table_name::table
+                                .select(#full_model_name::as_select())
+                                .find(&data.#id_column)
+                                .first(connection)
+                                .map_err(|_| carburetor::models::UploadTableResponseError {
+                                    id: data.#id_column.clone(),
+                                    code: carburetor::models::UploadTableResponseErrorType::RecordNotFound,
+                                })?;
+                            if &existing.#restrict_col != &context.#context_var {
+                                return Err(carburetor::models::UploadTableResponseError {
+                                    id: data.#id_column.clone(),
+                                    code: carburetor::models::UploadTableResponseErrorType::InsufficientPermission,
+                                });
+                            }
+                        },
+                    )
+                } else {
+                    (quote!(), quote!(), quote!())
+                };
+
             tokens.extend(quote! {
                 fn #function_name(
                     requests: Vec<#upload_request_table_name>,
                     connection: &mut diesel::PgConnection,
+                    #context_param
                 ) -> Vec<
                     Result<
                         carburetor::models::UploadTableResponseData,
@@ -415,6 +460,7 @@ mod backend {
                         .map(|x| {
                             match x {
                                 #upload_request_table_name::Insert(data) => {
+                                    #insert_context_validation
                                     let insert_data = #insert_model_name::from(data);
                                     let id_to_insert = insert_data.#id_column.clone();
                                     diesel::insert_into(super::#table_name::table)
@@ -443,6 +489,7 @@ mod backend {
                                         })
                                 }
                                 #upload_request_table_name::Update(data) => {
+                                    #update_context_validation
                                     let update_data = #changeset_model_name::from(data);
                                     let id_to_update = update_data.#id_column.clone();
                                     diesel::update(super::#table_name::table.find(&update_data.#id_column))
@@ -495,13 +542,27 @@ mod backend {
                 .map(|x| {
                     let field = &x.reference_table.ident;
                     let function_name = AsProcessTableUploadFunction(x).get_function_name();
-                    quote!(#field: #function_name(upload_request.#field, &mut connection))
+                    let context_arg = if x.restrict_to.is_some() {
+                        quote!(context,)
+                    } else {
+                        quote!()
+                    };
+                    quote!(#field: #function_name(upload_request.#field, &mut connection, #context_arg))
                 })
                 .collect::<Vec<_>>();
+
+            let has_context = AsSyncContext(self.0).has_context();
+            let context_param = if has_context {
+                let sync_context_name = AsSyncContext(self.0).get_model_name();
+                quote!(context: &#sync_context_name,)
+            } else {
+                quote!()
+            };
 
             tokens.extend(quote! {
                 pub fn process_upload_request(
                     upload_request: #upload_request_model_name,
+                    #context_param
                 ) -> carburetor::error::Result<#upload_response_model_name> {
 
                     #(#table_process_functions)*

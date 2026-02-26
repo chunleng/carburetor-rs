@@ -140,6 +140,7 @@ impl TestClientDatabase {
                 username TEXT NOT NULL,
                 first_name TEXT,
                 joined_on DATE NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL,
                 last_synced_at TIMESTAMPTZ,
                 is_deleted BOOLEAN NOT NULL,
                 dirty_flag TEXT,
@@ -148,6 +149,21 @@ impl TestClientDatabase {
         )
         .execute(&mut conn)
         .expect("Failed to create users table");
+
+        diesel::sql_query(
+            "CREATE TABLE messages(
+                id TEXT PRIMARY KEY,
+                recipient_id TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                body TEXT NOT NULL,
+                last_synced_at TIMESTAMPTZ,
+                is_deleted BOOLEAN NOT NULL,
+                dirty_flag TEXT,
+                column_sync_metadata JSON NOT NULL
+            )",
+        )
+        .execute(&mut conn)
+        .expect("Failed to create messages table");
 
         diesel::sql_query(
             "CREATE TABLE carburetor_offsets(

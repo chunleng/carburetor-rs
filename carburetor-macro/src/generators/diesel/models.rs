@@ -205,12 +205,10 @@ impl<'a> ToTokens for AsChangesetModel<'a> {
                 #[cfg(feature = "backend")]
                 {
                     use crate::parsers::table::column::ClientOnlyConfig;
-                    match (&x.column_type, &x.client_only_config) {
-                        (CarburetorColumnType::Id, _) => Some(quote!(pub #name: #ty)),
-                        (_, ClientOnlyConfig::Enabled { .. }) => None,
-                        (_, ClientOnlyConfig::Disabled { .. }) => {
-                            Some(quote!(pub #name: Option<#ty>))
-                        }
+                    match (&x.column_type, &x.client_only_config, &x.is_immutable) {
+                        (CarburetorColumnType::Id, _, _) => Some(quote!(pub #name: #ty)),
+                        (_, ClientOnlyConfig::Enabled { .. }, _) | (_, _, true) => None,
+                        (_, _, _) => Some(quote!(pub #name: Option<#ty>)),
                     }
                 }
                 #[cfg(feature = "client")]
@@ -283,4 +281,3 @@ pub(crate) fn generate_diesel_model(tokens: &mut TokenStream, table: &Carburetor
     #[cfg(feature = "backend")]
     tokens.extend(AsInsertModel(&table).to_token_stream());
 }
-
