@@ -18,8 +18,3 @@ proc-macro2 = { workspace = true }
 heck = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 derive_more = { workspace = true, features = ["display"] }
-
-[features]
-default = []
-backend = []
-client = []

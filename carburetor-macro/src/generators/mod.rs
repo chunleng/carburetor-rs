@@ -1,4 +1,3 @@
-#[cfg(feature = "client")]
 pub(crate) mod client;
 pub(crate) mod context;
 pub(crate) mod diesel;
@@ -8,12 +7,16 @@ pub(crate) mod upload;
 use proc_macro2::TokenStream;
 use quote::quote;
 
-use crate::generators::{
-    diesel::{models::generate_diesel_model, schema::generate_diesel_table_schema},
-    download::models::generate_download_sync_group_models,
-    upload::{
-        functions::generate_upload_sync_group_functions, models::generate_upload_sync_group_models,
+use crate::{
+    generators::{
+        diesel::{models::generate_diesel_model, schema::generate_diesel_table_schema},
+        download::models::generate_download_sync_group_models,
+        upload::{
+            functions::generate_upload_sync_group_functions,
+            models::generate_upload_sync_group_models,
+        },
     },
+    helpers::{TargetType, get_target_type},
 };
 
 use super::parsers::CarburetorSyncConfig;
@@ -22,13 +25,12 @@ pub(crate) fn generate_carburetor_sync_config(
     tokens: &mut TokenStream,
     sync_config: CarburetorSyncConfig,
 ) {
-    #[cfg(feature = "backend")]
-    let mut tokens = tokens;
-    #[cfg(feature = "backend")]
-    sync_config.tables.iter().for_each(|x| {
-        generate_diesel_table_schema(&mut tokens, &x);
-        generate_diesel_model(&mut tokens, &x);
-    });
+    if get_target_type() == TargetType::Backend {
+        sync_config.tables.iter().for_each(|x| {
+            generate_diesel_table_schema(tokens, &x);
+            generate_diesel_model(tokens, &x);
+        });
+    }
 
     sync_config.sync_groups.iter().for_each(|x| {
         let mut mod_tokens = TokenStream::new();
@@ -40,15 +42,12 @@ pub(crate) fn generate_carburetor_sync_config(
             &x,
         );
 
-        #[cfg(feature = "backend")]
-        {
+        if get_target_type() == TargetType::Backend {
             use crate::generators::context::models::generate_context_models;
-
             generate_context_models(&mut mod_tokens, x);
         }
 
-        #[cfg(feature = "client")]
-        {
+        if get_target_type() == TargetType::Client {
             use crate::generators::client::{
                 local_operations::{
                     functions::generate_local_operation_functions,

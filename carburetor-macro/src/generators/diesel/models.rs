@@ -3,10 +3,10 @@ use proc_macro2::TokenStream;
 use quote::{ToTokens, quote};
 use syn::{Ident, Path, Type, parse_quote, parse_str};
 
-#[cfg(feature = "backend")]
 use crate::generators::diesel::models::backend::AsInsertModel;
 use crate::{
     generators::diesel::schema::AsSchemaTable,
+    helpers::{TargetType, get_target_type},
     parsers::table::{
         CarburetorTable,
         column::{CarburetorColumn, CarburetorColumnType},
@@ -63,23 +63,23 @@ impl<'a> ToTokens for AsFullModel<'a> {
             .filter_map(|x| {
                 let name = &x.ident;
                 let ty = AsModelType(&x.diesel_type);
-                #[cfg(feature = "backend")]
-                {
-                    use crate::parsers::table::column::ClientOnlyConfig;
-                    match x.client_only_config {
-                        ClientOnlyConfig::Enabled { .. } => None,
-                        ClientOnlyConfig::Disabled => Some(quote!(pub #name: #ty)),
+                match get_target_type() {
+                    TargetType::Backend => {
+                        use crate::parsers::table::column::ClientOnlyConfig;
+                        match x.client_only_config {
+                            ClientOnlyConfig::Enabled { .. } => None,
+                            ClientOnlyConfig::Disabled => Some(quote!(pub #name: #ty)),
+                        }
                     }
-                }
-                #[cfg(feature = "client")]
-                {
-                    use crate::parsers::table::column::BackendOnlyConfig;
+                    TargetType::Client => {
+                        use crate::parsers::table::column::BackendOnlyConfig;
 
-                    match x.mod_on_backend_only_config {
-                        BackendOnlyConfig::Disabled => Some(quote!(pub #name: #ty)),
-                        // mod_on_backend_only_config on means that value is only changed in the
-                        // server, so it becomes optional
-                        BackendOnlyConfig::BySqlUtcNow => Some(quote!(pub #name: Option<#ty> )),
+                        match x.mod_on_backend_only_config {
+                            BackendOnlyConfig::Disabled => Some(quote!(pub #name: #ty)),
+                            // mod_on_backend_only_config on means that value is only changed in the
+                            // server, so it becomes optional
+                            BackendOnlyConfig::BySqlUtcNow => Some(quote!(pub #name: Option<#ty> )),
+                        }
                     }
                 }
             })
@@ -89,13 +89,14 @@ impl<'a> ToTokens for AsFullModel<'a> {
             prefix: None,
         };
         let derive_header;
-        #[cfg(feature = "backend")]
-        {
-            derive_header = quote!(#[derive(Debug, Clone, diesel::Queryable, diesel::Selectable)])
-        }
-        #[cfg(feature = "client")]
-        {
-            derive_header = quote!(#[derive(Debug, Clone, diesel::Queryable, diesel::Selectable, diesel::Insertable)])
+        match get_target_type() {
+            TargetType::Backend => {
+                derive_header =
+                    quote!(#[derive(Debug, Clone, diesel::Queryable, diesel::Selectable)])
+            }
+            TargetType::Client => {
+                derive_header = quote!(#[derive(Debug, Clone, diesel::Queryable, diesel::Selectable, diesel::Insertable)])
+            }
         }
 
         tokens.extend(quote! {
@@ -202,24 +203,27 @@ impl<'a> ToTokens for AsChangesetModel<'a> {
             .filter_map(|x| {
                 let name = &x.ident;
                 let ty = AsModelType(&x.diesel_type);
-                #[cfg(feature = "backend")]
-                {
-                    use crate::parsers::table::column::ClientOnlyConfig;
-                    match (&x.column_type, &x.client_only_config, &x.is_immutable) {
-                        (CarburetorColumnType::Id, _, _) => Some(quote!(pub #name: #ty)),
-                        (_, ClientOnlyConfig::Enabled { .. }, _) | (_, _, true) => None,
-                        (_, _, _) => Some(quote!(pub #name: Option<#ty>)),
-                    }
-                }
-                #[cfg(feature = "client")]
-                {
-                    use crate::parsers::table::column::BackendOnlyConfig;
 
-                    match (&x.column_type, &x.mod_on_backend_only_config) {
-                        (CarburetorColumnType::Id, _) => Some(quote!(pub #name: #ty)),
-                        (_, BackendOnlyConfig::Disabled) => Some(quote!(pub #name: Option<#ty>)),
-                        (_, BackendOnlyConfig::BySqlUtcNow) => {
-                            Some(quote!(pub #name: Option<Option<#ty>>))
+                match get_target_type() {
+                    TargetType::Backend => {
+                        use crate::parsers::table::column::ClientOnlyConfig;
+                        match (&x.column_type, &x.client_only_config, &x.is_immutable) {
+                            (CarburetorColumnType::Id, _, _) => Some(quote!(pub #name: #ty)),
+                            (_, ClientOnlyConfig::Enabled { .. }, _) | (_, _, true) => None,
+                            (_, _, _) => Some(quote!(pub #name: Option<#ty>)),
+                        }
+                    }
+                    TargetType::Client => {
+                        use crate::parsers::table::column::BackendOnlyConfig;
+
+                        match (&x.column_type, &x.mod_on_backend_only_config) {
+                            (CarburetorColumnType::Id, _) => Some(quote!(pub #name: #ty)),
+                            (_, BackendOnlyConfig::Disabled) => {
+                                Some(quote!(pub #name: Option<#ty>))
+                            }
+                            (_, BackendOnlyConfig::BySqlUtcNow) => {
+                                Some(quote!(pub #name: Option<Option<#ty>>))
+                            }
                         }
                     }
                 }
@@ -257,10 +261,15 @@ impl<'a> ToTokens for AsDieselTable<'a> {
                 quote!(#table_name)
             }
         };
-        #[cfg(feature = "backend")]
-        let diesel_backend: Path = parse_quote!(diesel::pg::Pg);
-        #[cfg(feature = "client")]
-        let diesel_backend: Path = parse_quote!(diesel::sqlite::Sqlite);
+        let diesel_backend: Path;
+        match get_target_type() {
+            TargetType::Backend => {
+                diesel_backend = parse_quote!(diesel::pg::Pg);
+            }
+            TargetType::Client => {
+                diesel_backend = parse_quote!(diesel::sqlite::Sqlite);
+            }
+        }
 
         tokens.extend(quote! {
             #[diesel(table_name = #table_path)]
@@ -278,6 +287,7 @@ pub(crate) fn generate_diesel_model(tokens: &mut TokenStream, table: &Carburetor
         #update_model
     });
 
-    #[cfg(feature = "backend")]
-    tokens.extend(AsInsertModel(&table).to_token_stream());
+    if get_target_type() == TargetType::Backend {
+        tokens.extend(AsInsertModel(&table).to_token_stream());
+    }
 }

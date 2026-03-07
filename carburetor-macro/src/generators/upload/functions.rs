@@ -1,8 +1,10 @@
 use proc_macro2::TokenStream;
 
-use crate::parsers::sync_group::CarburetorSyncGroup;
+use crate::{
+    helpers::{TargetType, get_target_type},
+    parsers::sync_group::CarburetorSyncGroup,
+};
 
-#[cfg(feature = "client")]
 mod client {
     use proc_macro2::TokenStream;
     use quote::{ToTokens, format_ident, quote};
@@ -345,7 +347,6 @@ mod client {
     }
 }
 
-#[cfg(feature = "backend")]
 mod backend {
     use proc_macro2::TokenStream;
     use quote::{ToTokens, format_ident, quote};
@@ -582,8 +583,7 @@ pub fn generate_upload_sync_group_functions(
     tokens: &mut TokenStream,
     sync_group: &CarburetorSyncGroup,
 ) {
-    #[cfg(feature = "client")]
-    {
+    if get_target_type() == TargetType::Client {
         use crate::generators::upload::functions::client::{
             AsProcessUploadResponseFunction, AsRetrieveUploadFunction,
         };
@@ -593,8 +593,7 @@ pub fn generate_upload_sync_group_functions(
         tokens.extend(AsProcessUploadResponseFunction(sync_group).to_token_stream());
     }
 
-    #[cfg(feature = "backend")]
-    {
+    if get_target_type() == TargetType::Backend {
         use crate::generators::upload::functions::backend::AsProcessUploadFunction;
         use quote::ToTokens;
 

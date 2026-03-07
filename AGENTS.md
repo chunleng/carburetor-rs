@@ -88,17 +88,17 @@ Clients work offline using generated per-table functions: `insert_<table>()`,
 # Note: Tests share a single SQLite DB singleton; --test-threads=1 is required
 # Note: Build sample-test-backend first so that it won't spend too much time
 #       launching the server and cause test to fail
-cargo build -p sample-test-backend --features=backend && cargo test -p e2e-test --features=client -- --test-threads=1
+cargo build -p sample-test-backend && CARBURETOR_TARGET=client cargo test -p e2e-test -- --test-threads=1
 
 # Building & Running - Backend
-cargo check --features backend
+cargo check
 cargo run --example simple-backend --features backend
 cargo expand --example simple-backend --features backend
 
 # Building & Running - Client
-cargo check --features client
-cargo run --example simple-client --features client
-cargo expand --example simple-client --features client
+CARBURETOR_TARGET=client cargo check
+CARBURETOR_TARGET=client cargo run --example simple-client --features client
+CARBURETOR_TARGET=client cargo expand --example simple-client --features client
 ```
 
 ## Common Pitfalls

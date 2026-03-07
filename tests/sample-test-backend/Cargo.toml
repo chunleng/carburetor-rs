@@ -12,7 +12,3 @@ tarpc = { workspace = true, features = ["serde-transport-bincode", "tcp"] }
 testcontainers.workspace = true
 testcontainers-modules = { workspace = true, features = ["postgres"] }
 tokio = { workspace = true, features = ["full"] }
-
-[features]
-default = []
-backend = ["carburetor/backend", "sample-test-core/backend"]

@@ -24,15 +24,9 @@ impl TestBackendHandle {
         let port = Self::find_available_port();
 
         let mut process = Command::new("cargo")
-            .args([
-                "run",
-                "-p",
-                "sample-test-backend",
-                "--features",
-                "backend",
-                "--",
-            ])
+            .args(["run", "-p", "sample-test-backend", "--"])
             .arg(port.to_string())
+            .env("CARBURETOR_TARGET", "backend")
             .spawn()
             .expect("Failed to start sample-test-backend");
 

@@ -59,7 +59,6 @@ impl DieselPostgresType {
         }
     }
 
-    #[cfg(feature = "client")]
     pub(crate) fn get_diesel_sqlite_string(&self) -> String {
         match self {
             DieselPostgresType::Text

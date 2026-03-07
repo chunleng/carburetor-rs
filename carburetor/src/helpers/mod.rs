@@ -1,14 +1,12 @@
-#[cfg(feature = "client")]
+#[cfg(for_client)]
 pub mod carburetor_offset;
-#[cfg(feature = "client")]
+#[cfg(for_client)]
 pub mod client_sync_metadata;
 
 use chrono::{DateTime, Utc};
 
-#[cfg(feature = "backend")]
-pub fn get_db_utc_now(
-    conn: &mut diesel::PgConnection,
-) -> crate::error::Result<DateTime<Utc>> {
+#[cfg(for_backend)]
+pub fn get_db_utc_now(conn: &mut diesel::PgConnection) -> crate::error::Result<DateTime<Utc>> {
     use diesel::RunQueryDsl;
     use diesel::dsl::sql;
     use diesel::sql_types::Timestamptz;
@@ -20,7 +18,7 @@ pub fn get_db_utc_now(
         })
 }
 
-#[cfg(feature = "backend")]
+#[cfg(for_backend)]
 pub fn get_connection() -> crate::error::Result<diesel::PgConnection> {
     use crate::{config::get_carburetor_config, error::Error};
     use diesel::{Connection, PgConnection};
@@ -34,7 +32,7 @@ pub fn get_connection() -> crate::error::Result<diesel::PgConnection> {
     )
 }
 
-#[cfg(feature = "client")]
+#[cfg(for_client)]
 pub fn get_connection() -> crate::error::Result<diesel::SqliteConnection> {
     use crate::{config::get_carburetor_config, error::Error};
     use diesel::{Connection, SqliteConnection, connection::SimpleConnection};

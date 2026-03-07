@@ -2,16 +2,25 @@ use proc_macro2::TokenStream;
 use quote::{ToTokens, quote};
 use syn::{Ident, Path, Type, parse_quote, parse_str};
 
-use crate::parsers::table::{CarburetorTable, postgres_type::DieselPostgresType};
+use crate::{
+    helpers::{TargetType, get_target_type},
+    parsers::table::{CarburetorTable, postgres_type::DieselPostgresType},
+};
 
 struct AsSchemaType<'a>(&'a DieselPostgresType);
 
 impl<'a> ToTokens for AsSchemaType<'a> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        #[cfg(feature = "backend")]
-        let ty: Type = parse_str(&self.0.to_string()).unwrap();
-        #[cfg(feature = "client")]
-        let ty: Type = parse_str(&self.0.get_diesel_sqlite_string()).unwrap();
+        let ty: Type;
+        match get_target_type() {
+            TargetType::Backend => {
+                ty = parse_str(&self.0.to_string()).unwrap();
+            }
+            TargetType::Client => {
+                ty = parse_str(&self.0.get_diesel_sqlite_string()).unwrap();
+            }
+        }
+
         tokens.extend(quote! { #ty });
     }
 }
@@ -38,9 +47,8 @@ impl<'a> ToTokens for AsSchemaTable<'a> {
             .0
             .columns
             .iter()
-            .filter_map(|x| {
-                #[cfg(feature = "backend")]
-                {
+            .filter_map(|x| match get_target_type() {
+                TargetType::Backend => {
                     use crate::parsers::table::column::ClientOnlyConfig;
                     match x.client_only_config {
                         ClientOnlyConfig::Enabled { .. } => None,
@@ -51,8 +59,7 @@ impl<'a> ToTokens for AsSchemaTable<'a> {
                         }
                     }
                 }
-                #[cfg(feature = "client")]
-                {
+                TargetType::Client => {
                     use crate::parsers::table::column::BackendOnlyConfig;
 
                     let name = &x.ident;

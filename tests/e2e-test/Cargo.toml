@@ -5,15 +5,12 @@ edition.workspace = true
 
 [dependencies]
 carburetor = { workspace = true }
-diesel = { workspace = true, features = ["sqlite"] }
+diesel = { workspace = true, features = [
+    "sqlite",
+    "returning_clauses_for_sqlite_3_35",
+] }
 nix = { version = "0.29", features = ["signal", "process"] }
 sample-test-core = { workspace = true }
 tarpc = { workspace = true, features = ["serde-transport-bincode", "tcp"] }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["full"] }
-
-[features]
-# NOTE: Features for test are not activated by default because rust-analyzer will unify all activated features,
-# causing carburetor-macro to fail because backend and client features cannot be activated at the same time
-default = []
-client = ["carburetor/client", "sample-test-core/client"]

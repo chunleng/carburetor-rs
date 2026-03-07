@@ -16,12 +16,3 @@ diesel = { workspace = true, features = ["chrono", "serde_json"] }
 anyhow = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-
-[features]
-default = []
-backend = ["carburetor-macro/backend", "diesel/postgres"]
-client = [
-    "carburetor-macro/client",
-    "diesel/sqlite",
-    "diesel/returning_clauses_for_sqlite_3_35",
-]

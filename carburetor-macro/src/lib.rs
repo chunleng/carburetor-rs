@@ -10,11 +10,6 @@ use syn::parse_macro_input;
 
 use crate::{generators::generate_carburetor_sync_config, parsers::CarburetorSyncConfig};
 
-#[cfg(all(not(feature = "backend"), not(feature = "client")))]
-compile_error!("Must enable either backend or client feature");
-#[cfg(all(feature = "backend", feature = "client"))]
-compile_error!("backend and client features are mutually exclusive");
-
 #[proc_macro]
 pub fn carburetor_sync_config(input: TokenStream) -> TokenStream {
     let sync_group = parse_macro_input!(input as CarburetorSyncConfig);

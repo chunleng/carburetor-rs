@@ -8,8 +8,3 @@ carburetor.workspace = true
 diesel.workspace = true
 serde.workspace = true
 tarpc = { workspace = true }
-
-[features]
-default = []
-backend = ["carburetor/backend"]
-client = ["carburetor/client"]

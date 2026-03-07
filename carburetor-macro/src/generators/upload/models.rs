@@ -5,13 +5,13 @@ use syn::Ident;
 
 use crate::{
     generators::diesel::models::AsModelType,
+    helpers::{TargetType, get_target_type},
     parsers::{
         sync_group::{CarburetorSyncGroup, SyncGroupTableConfig},
         table::column::{BackendOnlyConfig, CarburetorColumnType, ClientOnlyConfig},
     },
 };
 
-#[cfg(feature = "client")]
 pub mod client {
     use std::ops::Deref;
 
@@ -130,7 +130,6 @@ pub mod client {
     }
 }
 
-#[cfg(feature = "backend")]
 pub mod backend {
     use proc_macro2::TokenStream;
     use quote::{ToTokens, quote};
@@ -406,20 +405,20 @@ pub fn generate_upload_sync_group_models(
         let update_table = AsUploadUpdateTable(x);
         let conversion_functions: TokenStream;
 
-        #[cfg(feature = "client")]
-        {
-            use crate::generators::upload::models::client::AsFromFullToTable;
-            let from_full_to_table = AsFromFullToTable(x);
-            conversion_functions = quote!(#from_full_to_table);
-        }
-        #[cfg(feature = "backend")]
-        {
-            use crate::generators::upload::models::backend::{
-                AsFromUploadInsertToInsertModel, AsFromUploadUpdateToChangeset,
-            };
-            let from_insert_to_full = AsFromUploadInsertToInsertModel(x);
-            let from_update_to_changeset = AsFromUploadUpdateToChangeset(x);
-            conversion_functions = quote!(#from_insert_to_full #from_update_to_changeset);
+        match get_target_type() {
+            TargetType::Client => {
+                use crate::generators::upload::models::client::AsFromFullToTable;
+                let from_full_to_table = AsFromFullToTable(x);
+                conversion_functions = quote!(#from_full_to_table);
+            }
+            TargetType::Backend => {
+                use crate::generators::upload::models::backend::{
+                    AsFromUploadInsertToInsertModel, AsFromUploadUpdateToChangeset,
+                };
+                let from_insert_to_full = AsFromUploadInsertToInsertModel(x);
+                let from_update_to_changeset = AsFromUploadUpdateToChangeset(x);
+                conversion_functions = quote!(#from_insert_to_full #from_update_to_changeset);
+            }
         }
 
         quote! {

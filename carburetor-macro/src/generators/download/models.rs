@@ -7,6 +7,7 @@ use syn::{Ident, Type, parse_quote, parse_str};
 
 use crate::{
     generators::diesel::models::AsModelType,
+    helpers::{TargetType, get_target_type},
     parsers::{
         sync_group::CarburetorSyncGroup,
         table::{CarburetorTable, column::ClientOnlyConfig},
@@ -44,7 +45,6 @@ impl<'a> ToTokens for AsResponseField<'a> {
     }
 }
 
-#[cfg(feature = "client")]
 mod client {
     use crate::{
         generators::diesel::models::{AsChangesetModel, AsFullModel},
@@ -190,28 +190,29 @@ impl<'a> ToTokens for AsDownloadResponseTableModel<'a> {
         let diesel_table;
         let from_model_to_new_table_model;
         let from_model_to_update_table_model;
-        #[cfg(feature = "backend")]
-        {
-            attribute = quote! {
-                #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, diesel::Queryable, diesel::Selectable)]
-            };
-            diesel_table = crate::generators::diesel::models::AsDieselTable {
-                table,
-                prefix: Some("super"),
-            };
-            from_model_to_new_table_model = quote! {};
-            from_model_to_update_table_model = quote! {};
-        }
-        #[cfg(feature = "client")]
-        {
-            attribute = quote! {
-                #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-            };
-            diesel_table = quote! {};
-            from_model_to_new_table_model =
-                client::AsFromModelToNewTableModel { model_name, table };
-            from_model_to_update_table_model =
-                client::AsFromModelToUpdateTableModel { model_name, table };
+        match get_target_type() {
+            TargetType::Backend => {
+                attribute = quote! {
+                    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, diesel::Queryable, diesel::Selectable)]
+                };
+                diesel_table = crate::generators::diesel::models::AsDieselTable {
+                    table,
+                    prefix: Some("super"),
+                }
+                .to_token_stream();
+                from_model_to_new_table_model = quote! {};
+                from_model_to_update_table_model = quote! {};
+            }
+            TargetType::Client => {
+                attribute = quote! {
+                    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+                };
+                diesel_table = quote! {};
+                from_model_to_new_table_model =
+                    client::AsFromModelToNewTableModel { model_name, table }.to_token_stream();
+                from_model_to_update_table_model =
+                    client::AsFromModelToUpdateTableModel { model_name, table }.to_token_stream();
+            }
         }
 
         tokens.extend(quote! {
