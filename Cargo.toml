@@ -10,7 +10,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 repository = "https://github.com/chunleng/carburetor-rs"
 authors = ["ChunLeng Lim"]
 edition = "2024"
@@ -18,10 +18,10 @@ license = "MIT"
 keywords = ["lww", "crdt", "local-first"]
 
 [workspace.dependencies]
-carburetor = { path = "carburetor", version = "0.1.0" }
-carburetor-macro = { path = "carburetor-macro", version = "0.1.0" }
-sample-test-backend = { path = "tests/sample-test-backend", version = "0.1.0" }
-sample-test-core = { path = "tests/sample-test-core", version = "0.1.0" }
+carburetor = { path = "carburetor", version = "0.1.1" }
+carburetor-macro = { path = "carburetor-macro", version = "0.1.1" }
+sample-test-backend = { path = "tests/sample-test-backend", version = "0.1.1" }
+sample-test-core = { path = "tests/sample-test-core", version = "0.1.1" }
 syn = "2.0"
 quote = "1.0"
 proc-macro2 = "1.0"
