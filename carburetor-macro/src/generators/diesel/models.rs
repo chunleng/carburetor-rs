@@ -91,11 +91,10 @@ impl<'a> ToTokens for AsFullModel<'a> {
         let derive_header;
         match get_target_type() {
             TargetType::Backend => {
-                derive_header =
-                    quote!(#[derive(Debug, Clone, diesel::Queryable, diesel::Selectable)])
+                derive_header = quote!(#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, diesel::Queryable, diesel::Selectable)])
             }
             TargetType::Client => {
-                derive_header = quote!(#[derive(Debug, Clone, diesel::Queryable, diesel::Selectable, diesel::Insertable)])
+                derive_header = quote!(#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, diesel::Queryable, diesel::Selectable, diesel::Insertable)])
             }
         }
 

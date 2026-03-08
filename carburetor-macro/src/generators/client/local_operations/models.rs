@@ -30,7 +30,7 @@ impl<'a> ToTokens for AsLocalInsertModel<'a> {
             }
         });
         tokens.extend(quote! {
-            #[derive(Debug, Clone)]
+            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
             pub struct #model_name {
                 #(#fields,)*
             }
@@ -160,7 +160,7 @@ impl<'a> ToTokens for AsLocalUpdateModel<'a> {
             }
         });
         tokens.extend(quote! {
-            #[derive(Debug, Clone)]
+            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
             pub struct #model_name {
                 #(#fields,)*
             }
