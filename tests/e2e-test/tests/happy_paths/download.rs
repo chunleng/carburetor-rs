@@ -104,7 +104,6 @@ async fn test_clean_download() {
     assert_eq!(stored_users[0].id, "a".to_string());
 }
 
-
 #[tokio::test]
 async fn test_download_only_returns_messages_matching_context() {
     get_clean_test_client_db();

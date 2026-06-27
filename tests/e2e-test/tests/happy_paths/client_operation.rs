@@ -224,4 +224,3 @@ async fn test_update_user() {
     assert_eq!(stored_users[0].is_deleted, false);
     assert_eq!(stored_users[0].dirty_flag.as_ref().unwrap(), "update");
 }
-

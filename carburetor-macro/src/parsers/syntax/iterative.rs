@@ -20,4 +20,3 @@ pub trait IterativeParsing: FromIterator<Self::Item> {
 impl<T: Parse> IterativeParsing for Vec<T> {
     type Item = T;
 }
-
