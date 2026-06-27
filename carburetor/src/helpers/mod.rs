@@ -3,6 +3,9 @@ pub mod carburetor_offset;
 #[cfg(for_client)]
 pub mod client_sync_metadata;
 
+#[cfg(feature = "migration")]
+pub mod migration;
+
 use chrono::{DateTime, Utc};
 
 #[cfg(for_backend)]

@@ -59,6 +59,26 @@ impl DieselPostgresType {
         }
     }
 
+    pub(crate) fn get_sql_type_string(&self) -> &'static str {
+        match self {
+            DieselPostgresType::Text => "TEXT",
+            DieselPostgresType::SmallInt => "SMALLINT",
+            DieselPostgresType::Integer => "INTEGER",
+            DieselPostgresType::BigInt => "BIGINT",
+            DieselPostgresType::Float => "REAL",
+            DieselPostgresType::Double => "DOUBLE PRECISION",
+            DieselPostgresType::Bool => "BOOLEAN",
+            DieselPostgresType::Timestamp => "TIMESTAMP",
+            DieselPostgresType::Timestamptz => "TIMESTAMPTZ",
+            DieselPostgresType::Date => "DATE",
+            DieselPostgresType::Time => "TIME",
+            DieselPostgresType::Jsonb => "JSONB",
+            DieselPostgresType::Generic1(base_ty, inner_ty) => match base_ty {
+                DieselPostgresGeneric1Type::Nullable => inner_ty.get_sql_type_string(),
+            },
+        }
+    }
+
     pub(crate) fn get_diesel_sqlite_string(&self) -> String {
         match self {
             DieselPostgresType::Text

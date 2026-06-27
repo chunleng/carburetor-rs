@@ -22,5 +22,6 @@ serde_json = { workspace = true }
 
 [features]
 default = []
+migration = ["carburetor-macro/migration"]
 # This feature is used to allow docs to build correctly
 _docs = ["diesel/postgres", "diesel/sqlite"]
