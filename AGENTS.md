@@ -82,3 +82,15 @@ Download queries for each table in group run independently (no transaction). FK
 integrity across tables not guaranteed at query time. `cutoff_at` timestamp
 parameter ensures all tables in sync group use same time cutoff → reduces window
 where FK relationships temporarily broken during download.
+
+## Macro Code Generation & Helpers
+
+`carburetor-macro` generates sync code inline via `quote!`. Logic embedded in a
+`quote!` block is hard to read and untestable. **The purpose of
+`carburetor/src/helpers/` is to host runtime helper functions that generated code
+calls, so that complex logic moves out of `quote!` into ordinary, testable Rust
+functions.** Extracting logic here is the primary way to simplify code generation
+— when a `quote!` block becomes verbose or repeats across generators, move that
+logic into a helper and replace the inline code with a call to it.
+For a step-by-step example of adding and using a helper, see
+[`.agent/macro-helper.md`](.agent/macro-helper.md).
