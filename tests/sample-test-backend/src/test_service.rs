@@ -2,14 +2,25 @@ use carburetor::{
     chrono::{DateTimeUtc, NaiveDate},
     helpers::{get_connection, get_db_utc_now},
 };
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, dsl::insert_into};
+use diesel::{dsl::insert_into, ExpressionMethods, QueryDsl, QueryableByName, RunQueryDsl};
 use futures::StreamExt;
 use sample_test_core::{
     backend_service::TestBackend,
     schema::{self, all_clients, user_only},
+    ColumnMeta,
 };
 use tarpc::{context::Context, server::Channel};
 use tokio::signal::unix::{SignalKind, signal};
+
+#[derive(Debug, QueryableByName)]
+struct ColumnRow {
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    column_name: String,
+    #[diesel(sql_type = diesel::sql_types::Bool)]
+    is_primary_key: bool,
+    #[diesel(sql_type = diesel::sql_types::Bool)]
+    is_nullable: bool,
+}
 
 #[derive(Debug, Clone)]
 pub struct TestService;
@@ -160,5 +171,40 @@ impl TestBackend for TestService {
             .select(schema::users::last_synced_at)
             .first(&mut get_connection().unwrap())
             .unwrap()
+    }
+
+    async fn test_helper_get_table_columns(
+        self,
+        _: Context,
+        table_name: String,
+    ) -> Vec<ColumnMeta> {
+        diesel::sql_query(
+            "SELECT c.column_name, \
+               CASE WHEN pk.column_name IS NOT NULL THEN true ELSE false END AS is_primary_key, \
+               CASE WHEN c.is_nullable = 'YES' THEN true ELSE false END AS is_nullable \
+             FROM information_schema.columns c \
+             LEFT JOIN ( \
+               SELECT kcu.column_name \
+               FROM information_schema.table_constraints tc \
+               JOIN information_schema.key_column_usage kcu \
+                 ON tc.constraint_name = kcu.constraint_name \
+                 AND tc.table_schema = kcu.table_schema \
+               WHERE tc.constraint_type = 'PRIMARY KEY' \
+                 AND tc.table_name = $1 \
+             ) pk ON c.column_name = pk.column_name \
+             WHERE c.table_name = $2 \
+             ORDER BY c.ordinal_position",
+        )
+        .bind::<diesel::sql_types::Text, _>(&table_name)
+        .bind::<diesel::sql_types::Text, _>(&table_name)
+        .load::<ColumnRow>(&mut get_connection().unwrap())
+            .unwrap()
+            .into_iter()
+            .map(|row| ColumnMeta {
+                name: row.column_name,
+                is_primary_key: row.is_primary_key,
+                is_nullable: row.is_nullable,
+            })
+            .collect()
     }
 }

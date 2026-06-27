@@ -17,17 +17,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     diesel::sql_query("DROP TABLE IF EXISTS users").execute(&mut connection)?;
-    diesel::sql_query(
-        "CREATE TABLE users(
-            id TEXT PRIMARY KEY,
-            username TEXT NOT NULL,
-            first_name TEXT,
-            joined_on DATE,
-            last_synced_at TIMESTAMPTZ,
-            is_deleted BOOLEAN
-        )",
-    )
-    .execute(&mut connection)?;
+    schema::run_migrations(&mut connection)?;
 
     let id = "USER1".to_string();
 

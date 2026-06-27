@@ -19,6 +19,9 @@ use crate::{
     helpers::{TargetType, get_target_type},
 };
 
+#[cfg(feature = "migration")]
+use crate::generators::diesel::migration::generate_run_migrations;
+
 use super::parsers::CarburetorSyncConfig;
 
 pub(crate) fn generate_carburetor_sync_config(
@@ -30,6 +33,9 @@ pub(crate) fn generate_carburetor_sync_config(
             generate_diesel_table_schema(tokens, &x);
             generate_diesel_model(tokens, &x);
         });
+
+        #[cfg(feature = "migration")]
+        generate_run_migrations(tokens, &sync_config.tables);
     }
 
     sync_config.sync_groups.iter().for_each(|x| {

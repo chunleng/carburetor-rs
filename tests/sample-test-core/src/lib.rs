@@ -1,7 +1,17 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ColumnMeta {
+    pub name: String,
+    pub is_primary_key: bool,
+    pub is_nullable: bool,
+}
+
 pub mod backend_service {
     use carburetor::chrono::{DateTimeUtc, NaiveDate};
 
     use crate::schema::{all_clients, user_only};
+    use crate::ColumnMeta;
 
     #[tarpc::service]
     pub trait TestBackend {
@@ -38,6 +48,7 @@ pub mod backend_service {
             is_deleted: bool,
         );
         async fn test_helper_get_user_last_synced_at(id: String) -> DateTimeUtc;
+        async fn test_helper_get_table_columns(table_name: String) -> Vec<ColumnMeta>;
     }
 }
 
