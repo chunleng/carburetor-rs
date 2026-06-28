@@ -9,7 +9,7 @@ use crate::{
     helpers::{TargetType, get_target_type},
     parsers::table::{
         CarburetorTable,
-        column::{CarburetorColumn, CarburetorColumnType},
+        column::{CarburetorColumn, CarburetorColumnType, ColumnScope},
         postgres_type::DieselPostgresType,
     },
 };
@@ -64,23 +64,14 @@ impl<'a> ToTokens for AsFullModel<'a> {
                 let name = &x.ident;
                 let ty = AsModelType(&x.diesel_type);
                 match get_target_type() {
-                    TargetType::Backend => {
-                        use crate::parsers::table::column::ClientOnlyConfig;
-                        match x.client_only_config {
-                            ClientOnlyConfig::Enabled { .. } => None,
-                            ClientOnlyConfig::Disabled => Some(quote!(pub #name: #ty)),
-                        }
-                    }
-                    TargetType::Client => {
-                        use crate::parsers::table::column::BackendOnlyConfig;
-
-                        match x.mod_on_backend_only_config {
-                            BackendOnlyConfig::Disabled => Some(quote!(pub #name: #ty)),
-                            // mod_on_backend_only_config on means that value is only changed in the
-                            // server, so it becomes optional
-                            BackendOnlyConfig::BySqlUtcNow => Some(quote!(pub #name: Option<#ty> )),
-                        }
-                    }
+                    TargetType::Backend => match x.column_scope {
+                        ColumnScope::ClientOnly => None,
+                        _ => Some(quote!(pub #name: #ty)),
+                    },
+                    TargetType::Client => match x.column_scope {
+                        ColumnScope::ModOnBackendOnly => Some(quote!(pub #name: Option<#ty> )),
+                        _ => Some(quote!(pub #name: #ty)),
+                    },
                 }
             })
             .collect::<Vec<_>>();
@@ -116,10 +107,7 @@ pub mod backend {
 
     use crate::{
         generators::diesel::models::{AsDieselTable, AsModelType},
-        parsers::table::{
-            CarburetorTable,
-            column::{BackendOnlyConfig, ClientOnlyConfig},
-        },
+        parsers::table::{CarburetorTable, column::ColumnScope},
     };
 
     pub(crate) struct AsInsertModel<'a>(pub(crate) &'a CarburetorTable);
@@ -150,12 +138,9 @@ pub mod backend {
                 .filter_map(|x| {
                     let name = &x.ident;
                     let ty = AsModelType(&x.diesel_type);
-                    match x.client_only_config {
-                        ClientOnlyConfig::Enabled { .. } => None,
-                        ClientOnlyConfig::Disabled => match x.mod_on_backend_only_config {
-                            BackendOnlyConfig::Disabled => Some(quote!(pub #name: #ty)),
-                            BackendOnlyConfig::BySqlUtcNow => None,
-                        },
+                    match x.column_scope {
+                        ColumnScope::Both => Some(quote!(pub #name: #ty)),
+                        _ => None,
                     }
                 })
                 .collect::<Vec<_>>();
@@ -205,26 +190,19 @@ impl<'a> ToTokens for AsChangesetModel<'a> {
 
                 match get_target_type() {
                     TargetType::Backend => {
-                        use crate::parsers::table::column::ClientOnlyConfig;
-                        match (&x.column_type, &x.client_only_config, &x.is_immutable) {
+                        match (&x.column_type, &x.column_scope, &x.is_immutable) {
                             (CarburetorColumnType::Id, _, _) => Some(quote!(pub #name: #ty)),
-                            (_, ClientOnlyConfig::Enabled { .. }, _) | (_, _, true) => None,
+                            (_, ColumnScope::ClientOnly, _) | (_, _, true) => None,
                             (_, _, _) => Some(quote!(pub #name: Option<#ty>)),
                         }
                     }
-                    TargetType::Client => {
-                        use crate::parsers::table::column::BackendOnlyConfig;
-
-                        match (&x.column_type, &x.mod_on_backend_only_config) {
-                            (CarburetorColumnType::Id, _) => Some(quote!(pub #name: #ty)),
-                            (_, BackendOnlyConfig::Disabled) => {
-                                Some(quote!(pub #name: Option<#ty>))
-                            }
-                            (_, BackendOnlyConfig::BySqlUtcNow) => {
-                                Some(quote!(pub #name: Option<Option<#ty>>))
-                            }
+                    TargetType::Client => match (&x.column_type, &x.column_scope) {
+                        (CarburetorColumnType::Id, _) => Some(quote!(pub #name: #ty)),
+                        (_, ColumnScope::ModOnBackendOnly) => {
+                            Some(quote!(pub #name: Option<Option<#ty>>))
                         }
-                    }
+                        (_, _) => Some(quote!(pub #name: Option<#ty>)),
+                    },
                 }
             })
             .collect::<Vec<_>>();

@@ -8,7 +8,7 @@ use crate::{
     helpers::{TargetType, get_target_type},
     parsers::{
         sync_group::{CarburetorSyncGroup, SyncGroupTableConfig},
-        table::column::{BackendOnlyConfig, CarburetorColumnType, ClientOnlyConfig},
+        table::column::{CarburetorColumnType, ColumnScope},
     },
 };
 
@@ -24,7 +24,7 @@ pub mod client {
         generators::{client::models::AsTableMetadata, diesel::models::AsFullModel},
         parsers::{
             sync_group::SyncGroupTableConfig,
-            table::column::{BackendOnlyConfig, CarburetorColumnType, ClientOnlyConfig},
+            table::column::{CarburetorColumnType, ColumnScope},
         },
     };
 
@@ -48,9 +48,7 @@ pub mod client {
                 .columns
                 .iter()
                 .filter_map(|x| {
-                    if x.client_only_config == ClientOnlyConfig::Disabled
-                        && x.mod_on_backend_only_config == BackendOnlyConfig::Disabled
-                    {
+                    if x.column_scope == ColumnScope::Both {
                         let field_name = &x.ident;
                         Some(quote!(#field_name: self.#field_name))
                     } else {
@@ -68,10 +66,7 @@ pub mod client {
                     if x.column_type == CarburetorColumnType::Id {
                         let field_name = &x.ident;
                         Some(quote!(#field_name: self.#field_name))
-                    } else if x.client_only_config == ClientOnlyConfig::Disabled
-                        && x.mod_on_backend_only_config == BackendOnlyConfig::Disabled
-                        && !x.is_immutable
-                    {
+                    } else if x.column_scope == ColumnScope::Both && !x.is_immutable {
                         let field_name = &x.ident;
                         Some(quote! {
                             #field_name: match sync_metadata.#field_name {
@@ -139,7 +134,7 @@ pub mod backend {
         generators::diesel::models::{AsChangesetModel, backend::AsInsertModel},
         parsers::{
             sync_group::SyncGroupTableConfig,
-            table::column::{BackendOnlyConfig, CarburetorColumnType, ClientOnlyConfig},
+            table::column::{CarburetorColumnType, ColumnScope},
         },
     };
 
@@ -155,17 +150,12 @@ pub mod backend {
                 .reference_table
                 .columns
                 .iter()
-                .filter_map(|x| {
-                    if x.client_only_config != ClientOnlyConfig::Disabled {
-                        return None;
+                .filter_map(|x| match x.column_scope {
+                    ColumnScope::Both => {
+                        let field_name = &x.ident;
+                        Some(quote!(#field_name: value.#field_name))
                     }
-
-                    let field_name = &x.ident;
-
-                    match x.mod_on_backend_only_config {
-                        BackendOnlyConfig::Disabled => Some(quote!(#field_name: value.#field_name)),
-                        BackendOnlyConfig::BySqlUtcNow => None,
-                    }
+                    _ => None,
                 })
                 .collect::<Vec<_>>();
 
@@ -194,7 +184,7 @@ pub mod backend {
                 .columns
                 .iter()
                 .filter_map(|x| {
-                    if x.client_only_config != ClientOnlyConfig::Disabled
+                    if x.column_scope == ColumnScope::ClientOnly
                         || (x.column_type != CarburetorColumnType::Id && x.is_immutable)
                     {
                         return None;
@@ -202,9 +192,9 @@ pub mod backend {
 
                     let field_name = &x.ident;
 
-                    match x.mod_on_backend_only_config {
-                        BackendOnlyConfig::BySqlUtcNow => Some(quote!(#field_name: None)),
-                        BackendOnlyConfig::Disabled => Some(quote!(#field_name: value.#field_name)),
+                    match x.column_scope {
+                        ColumnScope::ModOnBackendOnly => Some(quote!(#field_name: None)),
+                        _ => Some(quote!(#field_name: value.#field_name)),
                     }
                 })
                 .collect::<Vec<_>>();
@@ -234,10 +224,7 @@ impl<'a> ToTokens for AsUploadUpdateTable<'a> {
                 Some(quote! {
                     pub #field_name: #field_type
                 })
-            } else if x.client_only_config == ClientOnlyConfig::Disabled
-                && x.mod_on_backend_only_config == BackendOnlyConfig::Disabled
-                && !x.is_immutable
-            {
+            } else if x.column_scope == ColumnScope::Both && !x.is_immutable {
                 let field_name = &x.ident;
                 let field_type = AsModelType(&x.diesel_type);
                 Some(quote! {
@@ -275,9 +262,7 @@ impl<'a> ToTokens for AsUploadInsertTable<'a> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let model_name = self.get_model_name();
         let fields = self.0.reference_table.columns.iter().filter_map(|x| {
-            if x.client_only_config == ClientOnlyConfig::Disabled
-                && x.mod_on_backend_only_config == BackendOnlyConfig::Disabled
-            {
+            if x.column_scope == ColumnScope::Both {
                 let field_name = &x.ident;
                 let field_type = AsModelType(&x.diesel_type);
                 Some(quote! {

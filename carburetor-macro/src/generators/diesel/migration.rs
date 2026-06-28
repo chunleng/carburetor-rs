@@ -4,11 +4,11 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 use crate::parsers::table::CarburetorTable;
-use crate::parsers::table::column::{CarburetorColumnType, ClientOnlyConfig};
+use crate::parsers::table::column::{CarburetorColumnType, ColumnScope};
 use crate::parsers::table::postgres_type::DieselPostgresType;
 
 fn column_def(column: &Rc<crate::parsers::table::column::CarburetorColumn>) -> Option<TokenStream> {
-    if matches!(column.client_only_config, ClientOnlyConfig::Enabled { .. }) {
+    if matches!(column.column_scope, ColumnScope::ClientOnly) {
         return None;
     }
 

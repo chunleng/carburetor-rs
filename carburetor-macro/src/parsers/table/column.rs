@@ -1,4 +1,4 @@
-use std::{mem::discriminant, ops::Deref, rc::Rc};
+use std::{ops::Deref, rc::Rc};
 
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
@@ -22,8 +22,8 @@ pub(crate) struct SyncMetadataColumns {
 pub(crate) struct CarburetorColumn {
     pub(crate) ident: Ident,
     pub(crate) diesel_type: DieselPostgresType,
-    pub(crate) client_only_config: ClientOnlyConfig,
-    pub(crate) mod_on_backend_only_config: BackendOnlyConfig,
+    pub(crate) column_scope: ColumnScope,
+    pub(crate) default_value: Option<DefaultValue>,
     pub(crate) column_type: CarburetorColumnType,
     pub(crate) is_immutable: bool,
 }
@@ -34,8 +34,8 @@ impl TryFrom<DieselTableStyleContent> for CarburetorColumn {
         let dup_col_type_err_msg = "column can only be assigned once with either #[id], #[last_synced_at] or #[client_column_sync_metadata]";
         let diesel_type = DieselPostgresType::try_from(&value.ty)?;
         let mut column_type = CarburetorColumnType::default();
-        let mut client_only = ClientOnlyConfig::default();
-        let mut backend_mod = BackendOnlyConfig::default();
+        let mut column_scope = ColumnScope::default();
+        let mut default_value = None;
         let mut is_immutable = false;
 
         for attr in value.attrs.iter() {
@@ -64,7 +64,8 @@ impl TryFrom<DieselTableStyleContent> for CarburetorColumn {
                         return Err(Error::new_spanned(value.name, dup_col_type_err_msg));
                     }
                     column_type = CarburetorColumnType::LastSyncedAt;
-                    backend_mod = BackendOnlyConfig::BySqlUtcNow;
+                    column_scope = ColumnScope::ModOnBackendOnly;
+                    default_value = Some(DefaultValue::Rust(quote!(diesel::dsl::now)));
                 }
                 "client_column_sync_metadata" => {
                     if diesel_type != DieselPostgresType::Jsonb {
@@ -76,9 +77,10 @@ impl TryFrom<DieselTableStyleContent> for CarburetorColumn {
                     if column_type != CarburetorColumnType::default() {
                         return Err(Error::new_spanned(value.name, dup_col_type_err_msg));
                     }
-                    client_only = ClientOnlyConfig::Enabled {
-                        default_value: quote!(carburetor::serde_json::from_str("{}").unwrap()),
-                    };
+                    column_scope = ColumnScope::ClientOnly;
+                    default_value = Some(DefaultValue::Rust(quote!(
+                        carburetor::serde_json::from_str("{}").unwrap()
+                    )));
                     column_type = CarburetorColumnType::ClientColumnSyncMetadata;
                 }
                 "is_deleted" => {
@@ -108,9 +110,8 @@ impl TryFrom<DieselTableStyleContent> for CarburetorColumn {
                     if column_type != CarburetorColumnType::default() {
                         return Err(Error::new_spanned(value.name, dup_col_type_err_msg));
                     }
-                    client_only = ClientOnlyConfig::Enabled {
-                        default_value: quote!(None),
-                    };
+                    column_scope = ColumnScope::ClientOnly;
+                    default_value = Some(DefaultValue::Rust(quote!(None)));
                     column_type = CarburetorColumnType::DirtyFlag;
                 }
                 "immutable" => {
@@ -128,34 +129,37 @@ impl TryFrom<DieselTableStyleContent> for CarburetorColumn {
         Ok(CarburetorColumn {
             ident: value.name,
             diesel_type,
-            client_only_config: client_only,
-            mod_on_backend_only_config: backend_mod,
+            column_scope,
+            default_value,
             column_type,
             is_immutable,
         })
     }
 }
 
-#[derive(Debug, Clone, Default)]
-pub enum ClientOnlyConfig {
-    #[default]
-    Disabled,
-    Enabled {
-        default_value: TokenStream,
-    },
-}
-
-impl PartialEq for ClientOnlyConfig {
-    fn eq(&self, other: &Self) -> bool {
-        discriminant(self) == discriminant(other)
-    }
-}
-
 #[derive(Debug, Clone, Default, PartialEq)]
-pub enum BackendOnlyConfig {
+pub(crate) enum ColumnScope {
     #[default]
-    Disabled,
-    BySqlUtcNow,
+    Both,
+    ClientOnly,
+    /// Backend-managed column. The value is still synced to the client
+    /// during download, but the client never modifies it locally — only
+    /// the backend writes to it.
+    ModOnBackendOnly,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum DefaultValue {
+    Rust(TokenStream),
+    Sql(SqlDefault),
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum SqlDefault {
+    Now,
+    Null,
+    EmptyJson,
+}
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -185,8 +189,8 @@ impl Default for IdColumn {
             ident: Ident::new("id", Span::call_site()),
             diesel_type: DieselPostgresType::Text,
             column_type: CarburetorColumnType::Id,
-            client_only_config: ClientOnlyConfig::Disabled,
-            mod_on_backend_only_config: BackendOnlyConfig::Disabled,
+            column_scope: ColumnScope::Both,
+            default_value: None,
             is_immutable: true,
         }))
     }
@@ -208,8 +212,8 @@ impl Default for LastSyncedAtColumn {
             ident: Ident::new("last_synced_at", Span::call_site()),
             diesel_type: DieselPostgresType::Timestamptz,
             column_type: CarburetorColumnType::LastSyncedAt,
-            client_only_config: ClientOnlyConfig::Disabled,
-            mod_on_backend_only_config: BackendOnlyConfig::BySqlUtcNow,
+            column_scope: ColumnScope::ModOnBackendOnly,
+            default_value: Some(DefaultValue::Rust(quote!(diesel::dsl::now))),
             is_immutable: false,
         }))
     }
@@ -231,8 +235,8 @@ impl Default for IsDeletedColumn {
             ident: Ident::new("is_deleted", Span::call_site()),
             diesel_type: DieselPostgresType::Bool,
             column_type: CarburetorColumnType::IsDeleted,
-            client_only_config: ClientOnlyConfig::Disabled,
-            mod_on_backend_only_config: BackendOnlyConfig::Disabled,
+            column_scope: ColumnScope::Both,
+            default_value: None,
             is_immutable: false,
         }))
     }
@@ -257,10 +261,8 @@ impl Default for DirtyFlagColumn {
                 Box::new(DieselPostgresType::Text),
             ),
             column_type: CarburetorColumnType::DirtyFlag,
-            client_only_config: ClientOnlyConfig::Enabled {
-                default_value: quote!(None),
-            },
-            mod_on_backend_only_config: BackendOnlyConfig::Disabled,
+            column_scope: ColumnScope::ClientOnly,
+            default_value: Some(DefaultValue::Rust(quote!(None))),
             is_immutable: false,
         }))
     }
@@ -282,10 +284,10 @@ impl Default for ClientColumnSyncMetadata {
             ident: Ident::new("column_sync_metadata", Span::call_site()),
             diesel_type: DieselPostgresType::Jsonb,
             column_type: CarburetorColumnType::ClientColumnSyncMetadata,
-            client_only_config: ClientOnlyConfig::Enabled {
-                default_value: quote!(carburetor::serde_json::from_str("{}").unwrap()),
-            },
-            mod_on_backend_only_config: BackendOnlyConfig::Disabled,
+            column_scope: ColumnScope::ClientOnly,
+            default_value: Some(DefaultValue::Rust(quote!(
+                carburetor::serde_json::from_str("{}").unwrap()
+            ))),
             is_immutable: false,
         }))
     }

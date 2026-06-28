@@ -15,7 +15,7 @@ use crate::{
         sync_group::CarburetorSyncGroup,
         table::{
             CarburetorTable,
-            column::{CarburetorColumnType, ClientOnlyConfig},
+            column::{CarburetorColumnType, ColumnScope},
         },
     },
 };
@@ -55,14 +55,14 @@ impl<'a> ToTokens for AsSyncTableToLocalDbFunction<'a> {
         let check_dirty_columns = {
             let columns = self.table.columns.clone();
             columns.into_iter().map(|x| {
-                match (&x.column_type, &x.client_only_config) {
+                match (&x.column_type, &x.column_scope) {
                     // Similar to to AsTableMetadata, we are only interested on non-metadata
                     // columns (data columns) that are synced to the backend eventually
                     // (non-client-only) here.
                     //
                     // Non-data columns (id, last_synced_at, etc.) are used to ensure syncing work,
                     // and client-only data will never need to be synced to the server.
-                    (CarburetorColumnType::Data, ClientOnlyConfig::Disabled) => {
+                    (CarburetorColumnType::Data, ColumnScope::Both | ColumnScope::ModOnBackendOnly) => {
                         let column_name = &x.ident;
                         quote! {
                             if existing_metadata.data.as_ref().and_then(|x| { x.#column_name.as_ref() }).and_then(|x| { x.dirty_at.to_owned() }).is_some() ||

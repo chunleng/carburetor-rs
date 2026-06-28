@@ -7,7 +7,7 @@ use crate::{
     generators::diesel::models::{AsChangesetModel, AsFullModel, AsModelType},
     parsers::{
         sync_group::{CarburetorSyncGroup, SyncGroupTableConfig},
-        table::column::{BackendOnlyConfig, CarburetorColumnType, ClientOnlyConfig},
+        table::column::{CarburetorColumnType, ColumnScope},
     },
 };
 
@@ -18,7 +18,7 @@ impl<'a> ToTokens for AsLocalInsertModel<'a> {
         let model_name = self.get_model_name();
         let fields = self.0.reference_table.columns.iter().filter_map(|x| {
             if x.column_type == CarburetorColumnType::Data
-                && x.mod_on_backend_only_config == BackendOnlyConfig::Disabled
+                && x.column_scope != ColumnScope::ModOnBackendOnly
             {
                 let field_name = &x.ident;
                 let field_type = AsModelType(&x.diesel_type);
@@ -63,15 +63,11 @@ impl<'a> ToTokens for AsLocalInsertToFull<'a> {
             .columns
             .iter()
             .filter_map(|x| {
-                match (
-                    &x.column_type,
-                    &x.client_only_config,
-                    &x.mod_on_backend_only_config,
-                ) {
-                    (&CarburetorColumnType::Data, _, &BackendOnlyConfig::Disabled) => {
+                match (&x.column_type, &x.column_scope, &x.default_value) {
+                    (_, ColumnScope::ModOnBackendOnly, _) => {
                         let field_name = &x.ident;
                         Some(quote! {
-                            #field_name: value.#field_name
+                            #field_name: None
                         })
                     }
                     (&CarburetorColumnType::Id, _, _) => {
@@ -106,16 +102,10 @@ impl<'a> ToTokens for AsLocalInsertToFull<'a> {
                             ).unwrap()
                         })
                     }
-                    (_, ClientOnlyConfig::Enabled { default_value }, _) => {
+                    (&CarburetorColumnType::Data, _, _) => {
                         let field_name = &x.ident;
                         Some(quote! {
-                            #field_name: #default_value
-                        })
-                    }
-                    (_, _, BackendOnlyConfig::BySqlUtcNow) => {
-                        let field_name = &x.ident;
-                        Some(quote! {
-                            #field_name: None
+                            #field_name: value.#field_name
                         })
                     }
                     _ => None,
@@ -147,7 +137,7 @@ impl<'a> ToTokens for AsLocalUpdateModel<'a> {
                     pub #field_name: #field_type
                 })
             } else if x.column_type == CarburetorColumnType::Data
-                && x.mod_on_backend_only_config == BackendOnlyConfig::Disabled
+                && x.column_scope != ColumnScope::ModOnBackendOnly
                 && !x.is_immutable
             {
                 let field_name = &x.ident;
@@ -192,15 +182,14 @@ impl<'a> ToTokens for AsLocalUpdateToChangeset<'a> {
             .reference_table
             .columns
             .iter()
-            .filter_map(|x| {
-                match (
-                    &x.column_type,
-                    &x.client_only_config,
-                    &x.mod_on_backend_only_config,
-                    &x.is_immutable,
-                ) {
-                    (&CarburetorColumnType::Id, _, _, _)
-                    | (&CarburetorColumnType::Data, _, &BackendOnlyConfig::Disabled, false) => {
+            .filter_map(
+                |x| match (&x.column_type, &x.column_scope, &x.is_immutable) {
+                    (&CarburetorColumnType::Id, _, _)
+                    | (
+                        &CarburetorColumnType::Data,
+                        ColumnScope::ClientOnly | ColumnScope::Both,
+                        false,
+                    ) => {
                         let field_name = &x.ident;
                         Some(quote! {
                             #field_name: value.#field_name
@@ -212,8 +201,8 @@ impl<'a> ToTokens for AsLocalUpdateToChangeset<'a> {
                             #field_name: None
                         })
                     }
-                }
-            })
+                },
+            )
             .collect::<Vec<_>>();
         tokens.extend(quote! {
             impl From<#local_update_model_name> for #changeset_model_name {

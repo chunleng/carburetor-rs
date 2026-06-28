@@ -10,7 +10,7 @@ use crate::{
     helpers::{TargetType, get_target_type},
     parsers::{
         sync_group::CarburetorSyncGroup,
-        table::{CarburetorTable, column::ClientOnlyConfig},
+        table::{CarburetorTable, column::ColumnScope},
     },
 };
 
@@ -48,7 +48,7 @@ impl<'a> ToTokens for AsResponseField<'a> {
 mod client {
     use crate::{
         generators::diesel::models::{AsChangesetModel, AsFullModel},
-        parsers::table::column::{BackendOnlyConfig, CarburetorColumnType, ClientOnlyConfig},
+        parsers::table::column::{CarburetorColumnType, ColumnScope, DefaultValue},
     };
 
     use super::*;
@@ -68,22 +68,24 @@ mod client {
                 .iter()
                 .map(|x| {
                     let column_name = &x.ident;
-                    match &x.client_only_config {
-                        // Cilent only columns will not have a value at this point because download
-                        // model (Backend). However, the value might not be used when it is a full
-                        // update instead of a insert. Usage of the value is up to the
-                        // sync_local_db script to handle.
-                        ClientOnlyConfig::Enabled { default_value } => {
+                    match &x.column_scope {
+                        ColumnScope::ClientOnly => {
+                            let default_value = match x
+                                .default_value
+                                .as_ref()
+                                .expect("ClientOnly columns must have a default")
+                            {
+                                DefaultValue::Rust(ts) => ts.clone(),
+                                DefaultValue::Sql(_) => quote!(None),
+                            };
                             quote!(#column_name: #default_value)
                         }
-                        ClientOnlyConfig::Disabled => match x.mod_on_backend_only_config {
-                            BackendOnlyConfig::Disabled => {
-                                quote!(#column_name: value.#column_name)
-                            }
-                            BackendOnlyConfig::BySqlUtcNow => {
-                                quote!(#column_name: Some(value.#column_name))
-                            }
-                        },
+                        ColumnScope::ModOnBackendOnly => {
+                            quote!(#column_name: Some(value.#column_name))
+                        }
+                        ColumnScope::Both => {
+                            quote!(#column_name: value.#column_name)
+                        }
                     }
                 })
                 .collect::<Vec<_>>();
@@ -114,21 +116,19 @@ mod client {
                 .iter()
                 .map(|x| {
                     let column_name = &x.ident;
-                    match (&x.column_type, &x.client_only_config) {
+                    match (&x.column_type, &x.column_scope) {
                         (CarburetorColumnType::Id, _) => quote!(#column_name: value.#column_name),
-                        // When updating from backend, the backend will be left empty by default
-                        // because ClientOnlyConfig should not be updatable via download sync
-                        (_, ClientOnlyConfig::Enabled { .. }) => {
+                        // When updating from backend, client-only values will be left empty by
+                        // default because they are not be updatable via download sync
+                        (_, ColumnScope::ClientOnly) => {
                             quote!(#column_name: None)
                         }
-                        (_, ClientOnlyConfig::Disabled) => match x.mod_on_backend_only_config {
-                            BackendOnlyConfig::Disabled => {
-                                quote!(#column_name: Some(value.#column_name))
-                            }
-                            BackendOnlyConfig::BySqlUtcNow => {
-                                quote!(#column_name: Some(Some(value.#column_name)))
-                            }
-                        },
+                        (_, ColumnScope::ModOnBackendOnly) => {
+                            quote!(#column_name: Some(Some(value.#column_name)))
+                        }
+                        (_, ColumnScope::Both) => {
+                            quote!(#column_name: Some(value.#column_name))
+                        }
                     }
                 })
                 .collect::<Vec<_>>();
@@ -174,10 +174,10 @@ impl<'a> ToTokens for AsDownloadResponseTableModel<'a> {
         let columns = table
             .columns
             .iter()
-            .filter_map(|x| match x.client_only_config {
+            .filter_map(|x| match x.column_scope {
                 // Backend database will not have any information as this is client-only.
-                ClientOnlyConfig::Enabled { .. } => None,
-                ClientOnlyConfig::Disabled => {
+                ColumnScope::ClientOnly => None,
+                _ => {
                     let name = &x.ident;
                     let ty = AsModelType(&x.diesel_type);
 

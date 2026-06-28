@@ -7,7 +7,7 @@ use crate::parsers::{
     sync_group::CarburetorSyncGroup,
     table::{
         CarburetorTable,
-        column::{CarburetorColumn, CarburetorColumnType, ClientOnlyConfig},
+        column::{CarburetorColumn, CarburetorColumnType, ColumnScope},
     },
 };
 
@@ -33,7 +33,7 @@ impl<'a> ToTokens for AsTableMetadata<'a> {
             .columns
             .iter()
             .filter_map(|x| {
-                if x.client_only_config == ClientOnlyConfig::Disabled
+                if x.column_scope != ColumnScope::ClientOnly
                     && (CarburetorColumnType::Data == x.column_type
                         || CarburetorColumnType::IsDeleted == x.column_type)
                 {

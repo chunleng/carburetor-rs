@@ -21,7 +21,7 @@ mod client {
         },
         parsers::{
             sync_group::{CarburetorSyncGroup, SyncGroupTableConfig},
-            table::column::{BackendOnlyConfig, CarburetorColumnType, ClientOnlyConfig},
+            table::column::{CarburetorColumnType, ColumnScope},
         },
     };
 
@@ -63,10 +63,7 @@ mod client {
                 .reference_table
                 .columns
                 .iter()
-                .filter(|x| {
-                    x.client_only_config == ClientOnlyConfig::Disabled
-                        && x.mod_on_backend_only_config == BackendOnlyConfig::Disabled
-                })
+                .filter(|x| x.column_scope == ColumnScope::Both)
                 .fold(
                     quote!(diesel::dsl::sql::<diesel::sql_types::Bool>("false")),
                     |acc, x| {
@@ -201,8 +198,7 @@ mod client {
                 .columns
                 .iter()
                 .filter(|x| {
-                    x.client_only_config == ClientOnlyConfig::Disabled
-                        && x.mod_on_backend_only_config == BackendOnlyConfig::Disabled
+                    x.column_scope == ColumnScope::Both
                         && (x.column_type == CarburetorColumnType::Data
                             || x.column_type == CarburetorColumnType::IsDeleted)
                 })
@@ -363,7 +359,7 @@ mod backend {
         },
         parsers::{
             sync_group::{CarburetorSyncGroup, SyncGroupTableConfig},
-            table::column::BackendOnlyConfig,
+            table::column::{ColumnScope, DefaultValue},
         },
     };
 
@@ -393,18 +389,21 @@ mod backend {
                 .sync_metadata_columns
                 .last_synced_at
                 .ident;
-            let backend_server_utc_update_columns = self
+            let mod_on_backend_only_columns = self
                 .0
                 .reference_table
                 .columns
                 .iter()
-                .filter_map(|x| match x.mod_on_backend_only_config {
-                    BackendOnlyConfig::Disabled => None,
-
-                    BackendOnlyConfig::BySqlUtcNow => {
-                        let column_name = &x.ident;
-                        Some(quote!(super::#table_name::#column_name.eq(diesel::dsl::now)))
+                .filter_map(|x| {
+                    if x.column_scope != ColumnScope::ModOnBackendOnly {
+                        return None;
                     }
+                    let column_name = &x.ident;
+                    let value = match x.default_value.as_ref()? {
+                        DefaultValue::Sql(_) => quote!(None),
+                        DefaultValue::Rust(expr) => quote!(#expr),
+                    };
+                    Some(quote!(super::#table_name::#column_name.eq(#value)))
                 })
                 .collect::<Vec<_>>();
 
@@ -467,7 +466,7 @@ mod backend {
                                     diesel::insert_into(super::#table_name::table)
                                         .values((
                                             &insert_data,
-                                            #(#backend_server_utc_update_columns,)*
+                                            #(#mod_on_backend_only_columns,)*
                                         ))
                                         .get_result(connection)
                                         .map(
@@ -496,7 +495,7 @@ mod backend {
                                     diesel::update(super::#table_name::table.find(&update_data.#id_column))
                                         .set((
                                             &update_data,
-                                            #(#backend_server_utc_update_columns,)*
+                                            #(#mod_on_backend_only_columns,)*
                                         ))
                                         .get_result(connection)
                                         .map(|x: #full_model_name| carburetor::models::UploadTableResponseData {

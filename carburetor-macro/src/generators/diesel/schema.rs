@@ -4,7 +4,7 @@ use syn::{Ident, Path, Type, parse_quote, parse_str};
 
 use crate::{
     helpers::{TargetType, get_target_type},
-    parsers::table::{CarburetorTable, postgres_type::DieselPostgresType},
+    parsers::table::{CarburetorTable, column::ColumnScope, postgres_type::DieselPostgresType},
 };
 
 struct AsSchemaType<'a>(&'a DieselPostgresType);
@@ -48,29 +48,20 @@ impl<'a> ToTokens for AsSchemaTable<'a> {
             .columns
             .iter()
             .filter_map(|x| match get_target_type() {
-                TargetType::Backend => {
-                    use crate::parsers::table::column::ClientOnlyConfig;
-                    match x.client_only_config {
-                        ClientOnlyConfig::Enabled { .. } => None,
-                        ClientOnlyConfig::Disabled => {
-                            let name = &x.ident;
-                            let ty = AsSchemaType(&x.diesel_type);
-                            Some(quote!(#name -> #ty))
-                        }
+                TargetType::Backend => match x.column_scope {
+                    ColumnScope::ClientOnly => None,
+                    _ => {
+                        let name = &x.ident;
+                        let ty = AsSchemaType(&x.diesel_type);
+                        Some(quote!(#name -> #ty))
                     }
-                }
+                },
                 TargetType::Client => {
-                    use crate::parsers::table::column::BackendOnlyConfig;
-
                     let name = &x.ident;
                     let ty = AsSchemaType(&x.diesel_type);
-                    match x.mod_on_backend_only_config {
-                        BackendOnlyConfig::Disabled => {
-                            return Some(quote!(#name -> #ty));
-                        }
-                        BackendOnlyConfig::BySqlUtcNow => {
-                            return Some(quote!(#name -> Nullable<#ty>));
-                        }
+                    match x.column_scope {
+                        ColumnScope::ModOnBackendOnly => Some(quote!(#name -> Nullable<#ty>)),
+                        _ => Some(quote!(#name -> #ty)),
                     }
                 }
             })
