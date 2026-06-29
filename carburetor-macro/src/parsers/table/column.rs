@@ -126,6 +126,12 @@ impl TryFrom<DieselTableStyleContent> for CarburetorColumn {
                 "#[immutable] can only be applied to non-special data columns",
             ));
         }
+        if column_scope != ColumnScope::Both && default_value.is_none() {
+            return Err(Error::new_spanned(
+                value.name,
+                "columns with scope other than Both must have a default value",
+            ));
+        }
         Ok(CarburetorColumn {
             ident: value.name,
             diesel_type,
