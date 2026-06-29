@@ -400,7 +400,10 @@ mod backend {
                     }
                     let column_name = &x.ident;
                     let value = match x.default_value.as_ref()? {
+                        #[cfg(feature = "migration")]
                         DefaultValue::Sql(_) => quote!(None),
+                        #[cfg(not(feature = "migration"))]
+                        DefaultValue::Sql => quote!(None),
                         DefaultValue::Rust(expr) => quote!(#expr),
                     };
                     Some(quote!(super::#table_name::#column_name.eq(#value)))

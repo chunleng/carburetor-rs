@@ -76,7 +76,10 @@ mod client {
                                 .expect("ClientOnly columns must have a default")
                             {
                                 DefaultValue::Rust(ts) => ts.clone(),
+                                #[cfg(feature = "migration")]
                                 DefaultValue::Sql(_) => quote!(None),
+                                #[cfg(not(feature = "migration"))]
+                                DefaultValue::Sql => quote!(None),
                             };
                             quote!(#column_name: #default_value)
                         }

@@ -2,7 +2,7 @@ use std::{ops::Deref, rc::Rc};
 
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{Error, Ident, Result, parse_quote};
+use syn::{Error, Expr, ExprLit, Ident, Lit, Meta, Result, parse_quote};
 
 use crate::parsers::{
     syntax::content::DieselTableStyleContent,
@@ -39,6 +39,75 @@ impl TryFrom<DieselTableStyleContent> for CarburetorColumn {
         let mut is_immutable = false;
 
         for attr in value.attrs.iter() {
+            // Handle #[default(...)] — Meta::List with nested name-value or bare path
+            if let Meta::List(list) = attr {
+                if list.path.is_ident("default") {
+                    let meta = list.parse_args::<Meta>()?;
+                    match meta {
+                        Meta::NameValue(nv) => {
+                            let key = nv.path.get_ident().ok_or_else(|| {
+                                Error::new_spanned(&nv.path, "expected `rust` or `sql`")
+                            })?;
+                            match key.to_string().as_str() {
+                                "rust" => {
+                                    if let Expr::Lit(ExprLit {
+                                        lit: Lit::Str(ref s),
+                                        ..
+                                    }) = nv.value
+                                    {
+                                        let tokens: TokenStream =
+                                            s.value().parse().map_err(|e| {
+                                                Error::new_spanned(
+                                                    &nv.value,
+                                                    format!("invalid Rust expression: {e}"),
+                                                )
+                                            })?;
+                                        default_value = Some(DefaultValue::Rust(tokens));
+                                    } else {
+                                        return Err(Error::new_spanned(
+                                            &nv.value,
+                                            "expected a string literal for `rust = \"...\"`",
+                                        ));
+                                    }
+                                }
+                                #[cfg(feature = "migration")]
+                                "sql" => {
+                                    let sql_default = parse_sql_default(&nv.value)?;
+                                    default_value = Some(DefaultValue::Sql(sql_default));
+                                }
+                                _ => {
+                                    return Err(Error::new_spanned(
+                                        key,
+                                        "expected `rust` or `sql`, found unknown key",
+                                    ));
+                                }
+                            }
+                        }
+                        Meta::Path(path) if path.is_ident("sql") => {
+                            #[cfg(not(feature = "migration"))]
+                            {
+                                default_value = Some(DefaultValue::Sql);
+                            }
+                            #[cfg(feature = "migration")]
+                            {
+                                return Err(Error::new_spanned(
+                                    path,
+                                    "`sql` requires a variant when the migration feature is \
+                                     enabled (e.g., `sql = Now`)",
+                                ));
+                            }
+                        }
+                        other => {
+                            return Err(Error::new_spanned(
+                                other,
+                                "expected `rust = \"...\"`, `sql = <variant>`, or `sql`",
+                            ));
+                        }
+                    }
+                    continue;
+                }
+            }
+
             let ident: Ident = parse_quote! {#attr};
             match ident.to_string().as_str() {
                 "id" => {
@@ -132,6 +201,7 @@ impl TryFrom<DieselTableStyleContent> for CarburetorColumn {
                 "columns with scope other than Both must have a default value",
             ));
         }
+        #[cfg(feature = "migration")]
         if let Some(DefaultValue::Sql(ref sql_default)) = default_value {
             sql_default.validate_type_compatibility(&value.name, &diesel_type)?;
         }
@@ -160,9 +230,13 @@ pub(crate) enum ColumnScope {
 #[derive(Debug, Clone)]
 pub(crate) enum DefaultValue {
     Rust(TokenStream),
+    #[cfg(not(feature = "migration"))]
+    Sql,
+    #[cfg(feature = "migration")]
     Sql(SqlDefault),
 }
 
+#[cfg(feature = "migration")]
 #[derive(Debug, Clone)]
 pub(crate) enum SqlDefault {
     Now,
@@ -172,6 +246,7 @@ pub(crate) enum SqlDefault {
     Number(String),
 }
 
+#[cfg(feature = "migration")]
 impl SqlDefault {
     /// Validates that this `SqlDefault` variant is compatible with the given
     /// column type. Returns an error describing the mismatch if incompatible.
@@ -241,6 +316,80 @@ impl SqlDefault {
         Ok(())
     }
 }
+
+#[cfg(feature = "migration")]
+/// Parses the value side of `sql = <variant>` into a `SqlDefault`.
+fn parse_sql_default(expr: &Expr) -> Result<SqlDefault> {
+    match expr {
+        // sql = Now | Null | EmptyJson
+        Expr::Path(path) if path.path.get_ident().is_some() => {
+            let ident = path.path.get_ident().unwrap();
+            match ident.to_string().as_str() {
+                "Now" => Ok(SqlDefault::Now),
+                "Null" => Ok(SqlDefault::Null),
+                "EmptyJson" => Ok(SqlDefault::EmptyJson),
+                other => Err(Error::new_spanned(
+                    ident,
+                    format!("unknown sql default variant: {other}"),
+                )),
+            }
+        }
+        // sql = Text("pending") | Number(0)
+        Expr::Call(call) => {
+            // Extract ident from call.func (which is Box<Expr>)
+            let func = match call.func.as_ref() {
+                Expr::Path(ep) if ep.path.get_ident().is_some() => {
+                    ep.path.get_ident().unwrap().clone()
+                }
+                _ => {
+                    return Err(Error::new_spanned(
+                        expr,
+                        "expected a sql default variant function call",
+                    ));
+                }
+            };
+            let arg = call.args.first().ok_or_else(|| {
+                Error::new_spanned(&func, format!("`{func}` requires one argument"))
+            })?;
+            match func.to_string().as_str() {
+                "Text" => {
+                    if let Expr::Lit(ExprLit {
+                        lit: Lit::Str(s), ..
+                    }) = arg
+                    {
+                        Ok(SqlDefault::Text(s.value()))
+                    } else {
+                        Err(Error::new_spanned(arg, "`Text` expects a string literal"))
+                    }
+                }
+                "Number" => {
+                    let num_str = match arg {
+                        Expr::Lit(ExprLit {
+                            lit: Lit::Int(n), ..
+                        }) => n.base10_digits().to_string(),
+                        Expr::Lit(ExprLit {
+                            lit: Lit::Float(n), ..
+                        }) => n.base10_digits().to_string(),
+                        _ => {
+                            return Err(Error::new_spanned(
+                                arg,
+                                "`Number` expects a numeric literal",
+                            ));
+                        }
+                    };
+                    Ok(SqlDefault::Number(num_str))
+                }
+                other => Err(Error::new_spanned(
+                    func,
+                    format!("unknown sql default variant: {other}"),
+                )),
+            }
+        }
+        _ => Err(Error::new_spanned(
+            expr,
+            "expected a sql default variant (e.g., Now, Null, Text(\"...\"), Number(0))",
+        )),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]

@@ -242,4 +242,50 @@ mod tests {
         let err = result.unwrap_err().to_string();
         assert!(err.contains("Duplicate column found"));
     }
+
+    #[cfg(not(feature = "migration"))]
+    #[test]
+    fn test_parse_sql_default_marker_without_variant() {
+        let input = quote! {
+            event(plural = "events") {
+                #[default(sql)]
+                created_at -> Timestamptz,
+            }
+        };
+
+        let result: CarburetorTable = parse2(input).unwrap();
+
+        let created_at = result
+            .columns
+            .iter()
+            .find(|c| c.ident == "created_at")
+            .unwrap();
+        assert!(
+            created_at.default_value.is_some(),
+            "marker `#[default(sql)]` should set a default value"
+        );
+    }
+
+    #[cfg(feature = "migration")]
+    #[test]
+    fn test_parse_sql_default_with_variant() {
+        let input = quote! {
+            event(plural = "events") {
+                #[default(sql = Now)]
+                created_at -> Timestamptz,
+            }
+        };
+
+        let result: CarburetorTable = parse2(input).unwrap();
+
+        let created_at = result
+            .columns
+            .iter()
+            .find(|c| c.ident == "created_at")
+            .unwrap();
+        assert!(
+            created_at.default_value.is_some(),
+            "`#[default(sql = now)]` should set a default value"
+        );
+    }
 }
