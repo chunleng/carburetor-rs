@@ -132,6 +132,9 @@ impl TryFrom<DieselTableStyleContent> for CarburetorColumn {
                 "columns with scope other than Both must have a default value",
             ));
         }
+        if let Some(DefaultValue::Sql(ref sql_default)) = default_value {
+            sql_default.validate_type_compatibility(&value.name, &diesel_type)?;
+        }
         Ok(CarburetorColumn {
             ident: value.name,
             diesel_type,
@@ -165,6 +168,78 @@ pub(crate) enum SqlDefault {
     Now,
     Null,
     EmptyJson,
+    Text(String),
+    Number(String),
+}
+
+impl SqlDefault {
+    /// Validates that this `SqlDefault` variant is compatible with the given
+    /// column type. Returns an error describing the mismatch if incompatible.
+    pub(crate) fn validate_type_compatibility(
+        &self,
+        column_name: &Ident,
+        diesel_type: &DieselPostgresType,
+    ) -> Result<()> {
+        match self {
+            SqlDefault::Now => {
+                if !matches!(
+                    diesel_type.unwrap_nullable(),
+                    DieselPostgresType::Timestamptz
+                        | DieselPostgresType::Timestamp
+                        | DieselPostgresType::Date
+                        | DieselPostgresType::Time
+                ) {
+                    return Err(Error::new_spanned(
+                        column_name,
+                        "sql default `Now` is only compatible with Timestamptz, Timestamp, Date, Time, and their Nullable variants",
+                    ));
+                }
+            }
+            SqlDefault::EmptyJson => {
+                if !matches!(diesel_type.unwrap_nullable(), DieselPostgresType::Jsonb) {
+                    return Err(Error::new_spanned(
+                        column_name,
+                        "sql default `EmptyJson` is only compatible with Jsonb and Nullable<Jsonb>",
+                    ));
+                }
+            }
+            SqlDefault::Text(_) => {
+                if !matches!(diesel_type.unwrap_nullable(), DieselPostgresType::Text) {
+                    return Err(Error::new_spanned(
+                        column_name,
+                        "sql default `Text` is only compatible with Text and Nullable<Text>",
+                    ));
+                }
+            }
+            SqlDefault::Number(_) => {
+                if !matches!(
+                    diesel_type.unwrap_nullable(),
+                    DieselPostgresType::SmallInt
+                        | DieselPostgresType::Integer
+                        | DieselPostgresType::BigInt
+                        | DieselPostgresType::Float
+                        | DieselPostgresType::Double
+                ) {
+                    return Err(Error::new_spanned(
+                        column_name,
+                        "sql default `Number` is only compatible with SmallInt, Integer, BigInt, Float, Double, and their Nullable variants",
+                    ));
+                }
+            }
+            SqlDefault::Null => {
+                if !matches!(
+                    diesel_type,
+                    DieselPostgresType::Generic1(DieselPostgresGeneric1Type::Nullable, _)
+                ) {
+                    return Err(Error::new_spanned(
+                        column_name,
+                        "sql default `Null` is only compatible with Nullable types",
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
 }
 }
 
