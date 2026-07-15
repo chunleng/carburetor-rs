@@ -8,7 +8,10 @@ use crate::{
     helpers::{TargetType, get_target_type},
     parsers::{
         sync_group::{CarburetorSyncGroup, SyncGroupTableConfig},
-        table::column::{CarburetorColumnType, ColumnScope},
+        table::{
+            column::{CarburetorColumnType, ColumnScope},
+            postgres_type::{DieselPostgresGeneric1Type, DieselPostgresType},
+        },
     },
 };
 
@@ -134,7 +137,7 @@ pub mod backend {
         generators::diesel::models::{AsChangesetModel, AsInsertModel},
         parsers::{
             sync_group::SyncGroupTableConfig,
-            table::column::{CarburetorColumnType, ColumnScope},
+            table::column::{CarburetorColumnType, ColumnScope, DefaultValue},
         },
     };
 
@@ -153,7 +156,28 @@ pub mod backend {
                 .filter_map(|x| match x.column_scope {
                     ColumnScope::Both => {
                         let field_name = &x.ident;
-                        Some(quote!(#field_name: value.#field_name))
+
+                        let is_sql = match x.default_value {
+                            #[cfg(feature = "migration")]
+                            Some(DefaultValue::Sql(_)) => true,
+                            #[cfg(not(feature = "migration"))]
+                            Some(DefaultValue::Sql) => true,
+                            _ => false,
+                        };
+
+                        if is_sql {
+                            // Both UploadInsert and InsertModel are Option<T>
+                            Some(quote!(#field_name: value.#field_name))
+                        } else if let Some(DefaultValue::Rust(default_expr)) =
+                            &x.default_value
+                        {
+                            // UploadInsert is Option<T> (old client may omit),
+                            // InsertModel is T (rust default applied in code)
+                            Some(quote!(#field_name: value.#field_name.unwrap_or_else(|| #default_expr)))
+                        } else {
+                            // No default: both sides are T
+                            Some(quote!(#field_name: value.#field_name))
+                        }
                     }
                     _ => None,
                 })
@@ -262,14 +286,38 @@ impl<'a> ToTokens for AsUploadInsertTable<'a> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let model_name = self.get_model_name();
         let fields = self.0.reference_table.columns.iter().filter_map(|x| {
-            if x.column_scope == ColumnScope::Both {
-                let field_name = &x.ident;
-                let field_type = AsModelType(&x.diesel_type);
-                Some(quote! {
-                    pub #field_name: #field_type
-                })
-            } else {
-                None
+            if x.column_scope != ColumnScope::Both {
+                return None;
+            }
+            let field_name = &x.ident;
+            let field_type = AsModelType(&x.diesel_type);
+
+            match get_target_type() {
+                // Old clients may omit newer default columns in upload JSON. Backend pads them with
+                // Option so missing fields deserialize to None (letting the DB apply its default).
+                // Client always includes all its own columns, so no padding needed.
+                TargetType::Backend => {
+                    if x.default_value.is_some() {
+                        let is_nullable = matches!(
+                            x.diesel_type,
+                            DieselPostgresType::Generic1(DieselPostgresGeneric1Type::Nullable, _)
+                        );
+                        if is_nullable {
+                            Some(quote! {
+                                #[serde(default, deserialize_with = "carburetor::helpers::serde_optional::double_optional::deserialize")]
+                                pub #field_name: Option<#field_type>
+                            })
+                        } else {
+                            Some(quote! {
+                                #[serde(default, deserialize_with = "carburetor::helpers::serde_optional::strict_optional::deserialize")]
+                                pub #field_name: Option<#field_type>
+                            })
+                        }
+                    } else {
+                        Some(quote!(pub #field_name: #field_type))
+                    }
+                }
+                TargetType::Client => Some(quote!(pub #field_name: #field_type)),
             }
         });
         tokens.extend(quote! {

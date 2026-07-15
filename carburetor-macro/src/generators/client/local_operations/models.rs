@@ -7,7 +7,7 @@ use crate::{
     generators::diesel::models::{AsChangesetModel, AsInsertModel, AsModelType},
     parsers::{
         sync_group::{CarburetorSyncGroup, SyncGroupTableConfig},
-        table::column::{CarburetorColumnType, ColumnScope},
+        table::column::{CarburetorColumnType, ColumnScope, DefaultValue},
     },
 };
 
@@ -22,9 +22,19 @@ impl<'a> ToTokens for AsLocalInsertModel<'a> {
             {
                 let field_name = &x.ident;
                 let field_type = AsModelType(&x.diesel_type);
-                Some(quote! {
-                    pub #field_name: #field_type
-                })
+                // Pad default columns with Option so the caller can omit
+                // them (None = use default). AsModelType already wraps
+                // nullable types in Option<T>, so this yields
+                // Option<Option<T>> for nullable default columns.
+                if x.default_value.is_some() {
+                    Some(quote! {
+                        pub #field_name: Option<#field_type>
+                    })
+                } else {
+                    Some(quote! {
+                        pub #field_name: #field_type
+                    })
+                }
             } else {
                 None
             }
@@ -101,6 +111,20 @@ impl<'a> ToTokens for AsLocalInsertToFull<'a> {
                                 )
                             ).unwrap()
                         })
+                    }
+                    (_, ColumnScope::Both | ColumnScope::ClientOnly, Some(default)) => {
+                        let field_name = &x.ident;
+                        match default {
+                            // Rust default: Insert is padded (Option<T>),
+                            // Insertable is not. Unwrap to the default value.
+                            DefaultValue::Rust(x) => Some(quote! {
+                                #field_name: value.#field_name.unwrap_or_else(|| #x)
+                            }),
+                            // Sql default: both sides padded, pass through.
+                            _ => Some(quote! {
+                                #field_name: value.#field_name
+                            }),
+                        }
                     }
                     (&CarburetorColumnType::Data, _, _) => {
                         let field_name = &x.ident;

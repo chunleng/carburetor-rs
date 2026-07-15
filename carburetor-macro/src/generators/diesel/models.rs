@@ -8,7 +8,7 @@ use crate::{
     helpers::{TargetType, get_target_type},
     parsers::table::{
         CarburetorTable,
-        column::{CarburetorColumn, CarburetorColumnType, ColumnScope},
+        column::{CarburetorColumn, CarburetorColumnType, ColumnScope, DefaultValue},
         postgres_type::DieselPostgresType,
     },
 };
@@ -120,12 +120,38 @@ impl<'a> ToTokens for AsInsertModel<'a> {
                 let ty = AsModelType(&x.diesel_type);
                 match get_target_type() {
                     TargetType::Backend => match x.column_scope {
-                        ColumnScope::Both => Some(quote!(pub #name: #ty)),
+                        ColumnScope::Both => {
+                            let is_sql = match x.default_value {
+                                #[cfg(feature = "migration")]
+                                Some(DefaultValue::Sql(_)) => true,
+                                #[cfg(not(feature = "migration"))]
+                                Some(DefaultValue::Sql) => true,
+                                _ => false,
+                            };
+                            if is_sql {
+                                Some(quote!(pub #name: Option<#ty>))
+                            } else {
+                                Some(quote!(pub #name: #ty))
+                            }
+                        }
                         _ => None,
                     },
                     TargetType::Client => match x.column_scope {
                         ColumnScope::ModOnBackendOnly => Some(quote!(pub #name: Option<#ty>)),
-                        _ => Some(quote!(pub #name: #ty)),
+                        _ => {
+                            let is_sql = match x.default_value {
+                                #[cfg(feature = "migration")]
+                                Some(DefaultValue::Sql(_)) => true,
+                                #[cfg(not(feature = "migration"))]
+                                Some(DefaultValue::Sql) => true,
+                                _ => false,
+                            };
+                            if is_sql {
+                                Some(quote!(pub #name: Option<#ty>))
+                            } else {
+                                Some(quote!(pub #name: #ty))
+                            }
+                        }
                     },
                 }
             })

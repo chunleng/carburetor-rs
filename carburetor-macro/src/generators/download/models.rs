@@ -87,7 +87,21 @@ mod client {
                             quote!(#column_name: Some(value.#column_name))
                         }
                         ColumnScope::Both => {
-                            quote!(#column_name: value.#column_name)
+                            // Sql-default columns are padded with Option in
+                            // Insertable, so wrap the download value in Some.
+                            let is_sql = match x.default_value {
+                                #[cfg(feature = "migration")]
+                                Some(DefaultValue::Sql(_)) => true,
+                                #[cfg(not(feature = "migration"))]
+                                Some(DefaultValue::Sql) => true,
+                                _ => false,
+                            };
+
+                            if is_sql {
+                                quote!(#column_name: Some(value.#column_name))
+                            } else {
+                                quote!(#column_name: value.#column_name)
+                            }
                         }
                     }
                 })
