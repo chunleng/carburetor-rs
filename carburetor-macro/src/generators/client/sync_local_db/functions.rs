@@ -6,7 +6,7 @@ use crate::{
     generators::{
         client::models::AsTableMetadata,
         diesel::{
-            models::{AsChangesetModel, AsFullModel},
+            models::{AsChangesetModel, AsFullModel, AsInsertModel},
             schema::AsSchemaTable,
         },
         download::models::{AsDownloadResponseModel, AsDownloadResponseTableModel},
@@ -41,6 +41,7 @@ impl<'a> ToTokens for AsSyncTableToLocalDbFunction<'a> {
             AsDownloadResponseTableModel(self.sync_group, self.table).get_type();
         let table_name = AsSchemaTable(self.table).get_table_name();
         let full_model_name = AsFullModel(self.table).get_model_name();
+        let insert_model_name = AsInsertModel(self.table).get_model_name();
         let changeset_model_name = AsChangesetModel(self.table).get_model_name();
         let id_column_name = &self.table.sync_metadata_columns.id.ident;
         let last_synced_at_column_name = &self.table.sync_metadata_columns.last_synced_at.ident;
@@ -123,7 +124,7 @@ impl<'a> ToTokens for AsSyncTableToLocalDbFunction<'a> {
                             }
                             None => {
                                 diesel::insert_into(table)
-                                    .values(#full_model_name::from(update_item.clone()))
+                                    .values(#insert_model_name::from(update_item.clone()))
                                     .execute(conn)?;
                             }
                         }

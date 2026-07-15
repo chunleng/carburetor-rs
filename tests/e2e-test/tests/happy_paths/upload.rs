@@ -11,7 +11,7 @@ async fn test_upload_with_no_dirty_record() {
     let backend = backend_server.client().await;
 
     // Insert a clean (non-dirty) user record
-    let clean_user = user_only::FullUser {
+    let clean_user = user_only::InsertableUser {
         username: "clean_user".to_string(),
         first_name: Some("NoDirty".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 5, 1).unwrap(),
@@ -55,7 +55,7 @@ async fn test_upload_with_inserted_dirty_record() {
     let backend = backend_server.client().await;
 
     // Insert a user with dirty flag set to "insert"
-    let dirty_user = user_only::FullUser {
+    let dirty_user = user_only::InsertableUser {
         username: "new_user".to_string(),
         first_name: Some("NewUser".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 6, 1).unwrap(),
@@ -156,7 +156,7 @@ async fn test_upload_with_updated_dirty_record() {
     let dirty_at = carburetor::helpers::get_utc_now().to_rfc3339();
 
     // Insert a user with dirty flag set to "update" with column-level metadata
-    let dirty_user = user_only::FullUser {
+    let dirty_user = user_only::InsertableUser {
         username: "updated_user".to_string(),
         first_name: Some("UpdatedUser".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 7, 1).unwrap(),
@@ -289,7 +289,7 @@ async fn test_upload_update_message_matching_context() {
 
     let dirty_at = carburetor::helpers::get_utc_now().to_rfc3339();
 
-    let dirty_message = all_clients::FullMessage {
+    let dirty_message = all_clients::InsertableMessage {
         id: "msg-update-1".to_string(),
         recipient_id: "user-1".to_string(),
         subject: "Updated Subject".to_string(),
@@ -340,7 +340,7 @@ async fn test_upload_insert_message_matching_context() {
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
 
-    let dirty_message = all_clients::FullMessage {
+    let dirty_message = all_clients::InsertableMessage {
         id: "msg-insert-1".to_string(),
         recipient_id: "user-1".to_string(),
         subject: "Hello".to_string(),

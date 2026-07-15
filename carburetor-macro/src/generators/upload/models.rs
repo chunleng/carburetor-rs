@@ -131,7 +131,7 @@ pub mod backend {
 
     use super::{AsUploadInsertTable, AsUploadUpdateTable};
     use crate::{
-        generators::diesel::models::{AsChangesetModel, backend::AsInsertModel},
+        generators::diesel::models::{AsChangesetModel, AsInsertModel},
         parsers::{
             sync_group::SyncGroupTableConfig,
             table::column::{CarburetorColumnType, ColumnScope},

@@ -125,7 +125,7 @@ impl TestBackend for TestService {
         let utc_now = get_db_utc_now(&mut conn).unwrap();
         insert_into(schema::users::table)
             .values((
-                schema::InsertUser {
+                schema::InsertableUser {
                     id,
                     username,
                     first_name,
@@ -152,7 +152,7 @@ impl TestBackend for TestService {
         let utc_now = get_db_utc_now(&mut conn).unwrap();
         insert_into(schema::messages::table)
             .values((
-                schema::InsertMessage {
+                schema::InsertableMessage {
                     id,
                     recipient_id,
                     subject,

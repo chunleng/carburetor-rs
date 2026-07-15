@@ -81,7 +81,7 @@ async fn test_upload_update_and_update_same_column_between_retrieve_and_store() 
         .await
         .unwrap();
 
-    let synced_user = user_only::FullUser {
+    let synced_user = user_only::InsertableUser {
         id: "user-edge-1".to_string(),
         username: "original".to_string(),
         first_name: Some("Original".to_string()),

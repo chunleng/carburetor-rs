@@ -78,7 +78,7 @@ async fn test_active_users() {
     let mut conn = get_clean_test_client_db().get_connection();
 
     // Insert two users: one active, one soft-deleted
-    let active_user = user_only::FullUser {
+    let active_user = user_only::InsertableUser {
         username: "active_user".to_string(),
         first_name: Some("Alice".to_string()),
         joined_on: NaiveDate::from_ymd_opt(2025, 3, 1).unwrap(),
@@ -89,7 +89,7 @@ async fn test_active_users() {
         dirty_flag: None,
         column_sync_metadata: carburetor::serde_json::from_str("{}").unwrap(),
     };
-    let deleted_user = user_only::FullUser {
+    let deleted_user = user_only::InsertableUser {
         username: "deleted_user".to_string(),
         first_name: Some("Bob".to_string()),
         joined_on: NaiveDate::from_ymd_opt(2025, 4, 1).unwrap(),
@@ -125,7 +125,7 @@ async fn test_delete_user() {
     let mut conn = get_clean_test_client_db().get_connection();
 
     // First, insert a user directly using diesel
-    let test_user = user_only::FullUser {
+    let test_user = user_only::InsertableUser {
         username: "test_username".to_string(),
         first_name: Some("John".to_string()),
         joined_on: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
@@ -169,7 +169,7 @@ async fn test_update_user() {
     let mut conn = get_clean_test_client_db().get_connection();
 
     // First, insert a user directly using diesel
-    let test_user = user_only::FullUser {
+    let test_user = user_only::InsertableUser {
         username: "original_username".to_string(),
         first_name: Some("John".to_string()),
         joined_on: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),

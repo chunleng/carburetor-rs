@@ -47,7 +47,7 @@ impl<'a> ToTokens for AsResponseField<'a> {
 
 mod client {
     use crate::{
-        generators::diesel::models::{AsChangesetModel, AsFullModel},
+        generators::diesel::models::{AsChangesetModel, AsInsertModel},
         parsers::table::column::{CarburetorColumnType, ColumnScope, DefaultValue},
     };
 
@@ -60,7 +60,7 @@ mod client {
     impl<'a> ToTokens for AsFromModelToNewTableModel<'a> {
         fn to_tokens(&self, tokens: &mut TokenStream) {
             let model_name = self.model_name;
-            let diesel_full_model = AsFullModel(&self.table).get_model_name();
+            let insert_model = AsInsertModel(&self.table).get_model_name();
 
             let columns = self
                 .table
@@ -93,7 +93,7 @@ mod client {
                 })
                 .collect::<Vec<_>>();
             tokens.extend(quote! {
-                impl From<#model_name> for #diesel_full_model {
+                impl From<#model_name> for #insert_model {
                     fn from(value: #model_name) -> Self {
                         Self {
                             #(#columns,)*

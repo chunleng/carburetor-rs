@@ -88,7 +88,7 @@ async fn test_upload_update_then_download() {
         .unwrap();
 
     // Seed the client with the user as if it was already downloaded (record + offset)
-    let synced_user = user_only::FullUser {
+    let synced_user = user_only::InsertableUser {
         id: "user-sync-2".to_string(),
         username: "original_user".to_string(),
         first_name: Some("OriginalUser".to_string()),

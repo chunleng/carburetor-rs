@@ -352,7 +352,7 @@ mod backend {
         generators::{
             context::models::AsSyncContext,
             diesel::{
-                models::{AsChangesetModel, AsFullModel, backend::AsInsertModel},
+                models::{AsChangesetModel, AsFullModel, AsInsertModel},
                 schema::AsSchemaTable,
             },
             upload::models::{AsUploadRequest, AsUploadRequestTable, AsUploadResponseModel},

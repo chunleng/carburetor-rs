@@ -4,7 +4,7 @@ use quote::{ToTokens, format_ident, quote};
 use syn::Ident;
 
 use crate::{
-    generators::diesel::models::{AsChangesetModel, AsFullModel, AsModelType},
+    generators::diesel::models::{AsChangesetModel, AsInsertModel, AsModelType},
     parsers::{
         sync_group::{CarburetorSyncGroup, SyncGroupTableConfig},
         table::column::{CarburetorColumnType, ColumnScope},
@@ -56,7 +56,7 @@ struct AsLocalInsertToFull<'a>(&'a SyncGroupTableConfig);
 impl<'a> ToTokens for AsLocalInsertToFull<'a> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let local_insert_model_name = AsLocalInsertModel(self.0).get_model_name();
-        let full_model_name = AsFullModel(&self.0.reference_table).get_model_name();
+        let insert_model_name = AsInsertModel(&self.0.reference_table).get_model_name();
         let columns = self
             .0
             .reference_table
@@ -113,7 +113,7 @@ impl<'a> ToTokens for AsLocalInsertToFull<'a> {
             })
             .collect::<Vec<_>>();
         tokens.extend(quote! {
-            impl From<#local_insert_model_name> for #full_model_name {
+            impl From<#local_insert_model_name> for #insert_model_name {
                 fn from(value: #local_insert_model_name) -> Self {
                     Self {
                         #(#columns,)*
