@@ -2,12 +2,12 @@ use carburetor::{
     chrono::{DateTimeUtc, NaiveDate},
     helpers::{get_connection, get_db_utc_now},
 };
-use diesel::{dsl::insert_into, ExpressionMethods, QueryDsl, QueryableByName, RunQueryDsl};
+use diesel::{ExpressionMethods, QueryDsl, QueryableByName, RunQueryDsl, dsl::insert_into};
 use futures::StreamExt;
 use sample_test_core::{
+    ColumnMeta,
     backend_service::TestBackend,
     schema::{self, all_clients, user_only},
-    ColumnMeta,
 };
 use tarpc::{context::Context, server::Channel};
 use tokio::signal::unix::{SignalKind, signal};
@@ -198,13 +198,13 @@ impl TestBackend for TestService {
         .bind::<diesel::sql_types::Text, _>(&table_name)
         .bind::<diesel::sql_types::Text, _>(&table_name)
         .load::<ColumnRow>(&mut get_connection().unwrap())
-            .unwrap()
-            .into_iter()
-            .map(|row| ColumnMeta {
-                name: row.column_name,
-                is_primary_key: row.is_primary_key,
-                is_nullable: row.is_nullable,
-            })
-            .collect()
+        .unwrap()
+        .into_iter()
+        .map(|row| ColumnMeta {
+            name: row.column_name,
+            is_primary_key: row.is_primary_key,
+            is_nullable: row.is_nullable,
+        })
+        .collect()
     }
 }

@@ -10,8 +10,8 @@ pub struct ColumnMeta {
 pub mod backend_service {
     use carburetor::chrono::{DateTimeUtc, NaiveDate};
 
-    use crate::schema::{all_clients, user_only};
     use crate::ColumnMeta;
+    use crate::schema::{all_clients, user_only};
 
     #[tarpc::service]
     pub trait TestBackend {
