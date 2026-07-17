@@ -19,5 +19,5 @@ async fn main() {
         database_url: test_db.database_url.clone(),
     });
 
-    TestService::start(port).await;
+    TestService::start(port, test_db.database_url).await;
 }

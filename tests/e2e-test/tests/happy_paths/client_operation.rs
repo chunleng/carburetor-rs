@@ -7,12 +7,19 @@ use sample_test_core::schema::user_only;
 async fn test_insert_user() {
     let mut conn = get_clean_test_client_db().get_connection();
 
-    // Insert a user using the generated client function
+    // Capture time before insert to verify created_at default
+    let before = carburetor::helpers::get_utc_now();
+
+    // Insert a user using the generated client function,
+    // passing None for fields with defaults to verify they are applied
     let inserted_user = user_only::insert_user(user_only::InsertUser {
         username: "test_username".to_string(),
         first_name: Some("John".to_string()),
         joined_on: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
-        created_at: carburetor::helpers::get_utc_now(),
+        created_at: None,
+        nickname: None,
+        priority: None,
+        preferences: None,
     })
     .unwrap();
 
@@ -28,7 +35,27 @@ async fn test_insert_user() {
     assert!(inserted_user.dirty_flag.is_some());
     assert_eq!(inserted_user.dirty_flag.as_ref().unwrap(), "insert");
 
-    // Verify the user exists in the database
+    // Verify Rust defaults were applied when None was passed
+    assert!(
+        inserted_user.created_at >= before,
+        "created_at should default to current time when None is passed"
+    );
+    assert_eq!(
+        inserted_user.nickname,
+        Some("default_nickname".to_string()),
+        "nickname should default to 'default_nickname' when None is passed"
+    );
+
+    // Verify SQL defaults were applied when None was passed
+    assert_eq!(
+        inserted_user.priority, 0,
+        "priority should default to 0 when None is passed"
+    );
+    assert_eq!(
+        inserted_user.preferences,
+        Some("no preference".to_string()),
+        "preferences should default to 'no preference' when None is passed"
+    );
     let stored_users: Vec<user_only::FullUser> = user_only::users::table
         .select(user_only::FullUser::as_select())
         .load(&mut conn)
@@ -42,6 +69,9 @@ async fn test_insert_user() {
     let updated_user = user_only::update_user(user_only::UpdateUser {
         username: Some("updated_username".to_string()),
         first_name: Some(Some("Jane".to_string())),
+        nickname: None,
+        priority: None,
+        preferences: None,
         joined_on: None,
         id: inserted_user.id.clone(),
     })
@@ -83,6 +113,9 @@ async fn test_active_users() {
         first_name: Some("Alice".to_string()),
         joined_on: NaiveDate::from_ymd_opt(2025, 3, 1).unwrap(),
         created_at: carburetor::helpers::get_utc_now(),
+        nickname: None,
+        priority: None,
+        preferences: None,
         id: "user-active-1".to_string(),
         last_synced_at: None,
         is_deleted: false,
@@ -94,6 +127,9 @@ async fn test_active_users() {
         first_name: Some("Bob".to_string()),
         joined_on: NaiveDate::from_ymd_opt(2025, 4, 1).unwrap(),
         created_at: carburetor::helpers::get_utc_now(),
+        nickname: None,
+        priority: None,
+        preferences: None,
         id: "user-deleted-1".to_string(),
         last_synced_at: None,
         is_deleted: true,
@@ -130,6 +166,9 @@ async fn test_delete_user() {
         first_name: Some("John".to_string()),
         joined_on: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
         created_at: carburetor::helpers::get_utc_now(),
+        nickname: None,
+        priority: None,
+        preferences: None,
         id: "user-test-123".to_string(),
         last_synced_at: None,
         is_deleted: false,
@@ -174,6 +213,9 @@ async fn test_update_user() {
         first_name: Some("John".to_string()),
         joined_on: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
         created_at: carburetor::helpers::get_utc_now(),
+        nickname: None,
+        priority: None,
+        preferences: None,
         id: "user-test-456".to_string(),
         last_synced_at: None,
         is_deleted: false,
@@ -190,6 +232,9 @@ async fn test_update_user() {
     let updated_user = user_only::update_user(user_only::UpdateUser {
         username: Some("updated_username".to_string()),
         first_name: Some(Some("Jane".to_string())),
+        nickname: None,
+        priority: None,
+        preferences: None,
         joined_on: Some(NaiveDate::from_ymd_opt(2025, 2, 1).unwrap()),
         id: test_user.id.clone(),
     })

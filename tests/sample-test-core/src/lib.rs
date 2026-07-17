@@ -5,6 +5,7 @@ pub struct ColumnMeta {
     pub name: String,
     pub is_primary_key: bool,
     pub is_nullable: bool,
+    pub column_default: Option<String>,
 }
 
 pub mod backend_service {
@@ -39,6 +40,9 @@ pub mod backend_service {
             joined_on: NaiveDate,
             created_at: DateTimeUtc,
             is_deleted: bool,
+            nickname: Option<String>,
+            priority: Option<i32>,
+            preferences: Option<Option<String>>,
         );
         async fn test_helper_insert_message(
             id: String,
@@ -49,6 +53,7 @@ pub mod backend_service {
         );
         async fn test_helper_get_user_last_synced_at(id: String) -> DateTimeUtc;
         async fn test_helper_get_table_columns(table_name: String) -> Vec<ColumnMeta>;
+        async fn test_helper_get_database_url() -> String;
     }
 }
 
@@ -62,7 +67,14 @@ pub mod schema {
                 first_name -> Nullable<Text>,
                 joined_on -> Date,
                 #[immutable]
+                #[default(rust = "carburetor::helpers::get_utc_now()")]
                 created_at -> Timestamptz,
+                #[default(rust = "Some(\"default_nickname\".to_string())")]
+                nickname -> Nullable<Text>,
+                #[default(sql = Number(0))]
+                priority -> Integer,
+                #[default(sql = Text("no preference"))]
+                preferences -> Nullable<Text>,
             }
             message {
                 #[immutable]

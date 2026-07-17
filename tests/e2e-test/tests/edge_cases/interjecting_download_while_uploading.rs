@@ -19,6 +19,9 @@ async fn test_download_between_upload_process_and_store() {
             carburetor::chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
             carburetor::helpers::get_utc_now(),
             false,
+            None,
+            None,
+            None,
         )
         .await
         .unwrap();
@@ -34,6 +37,9 @@ async fn test_download_between_upload_process_and_store() {
         first_name: Some("Original".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
         created_at: carburetor::helpers::get_utc_now(),
+        nickname: None,
+        priority: None,
+        preferences: None,
         last_synced_at: Some(before_seed),
         is_deleted: false,
         dirty_flag: None,
@@ -50,6 +56,9 @@ async fn test_download_between_upload_process_and_store() {
         id: "user-interject-1".to_string(),
         username: Some("updated".to_string()),
         first_name: None,
+        nickname: None,
+        priority: None,
+        preferences: None,
         joined_on: None,
     })
     .unwrap();

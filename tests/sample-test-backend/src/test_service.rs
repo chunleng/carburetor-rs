@@ -20,13 +20,17 @@ struct ColumnRow {
     is_primary_key: bool,
     #[diesel(sql_type = diesel::sql_types::Bool)]
     is_nullable: bool,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
+    column_default: Option<String>,
 }
 
 #[derive(Debug, Clone)]
-pub struct TestService;
+pub struct TestService {
+    database_url: String,
+}
 
 impl TestService {
-    pub async fn start(port: u16) {
+    pub async fn start(port: u16, database_url: String) {
         let mut listener = tarpc::serde_transport::tcp::listen(
             format!("127.0.0.1:{}", port),
             tarpc::tokio_serde::formats::Bincode::default,
@@ -53,10 +57,11 @@ impl TestService {
                         }
                     };
 
+                    let database_url = database_url.clone();
                     tokio::spawn(async move {
                         let server = tarpc::server::BaseChannel::with_defaults(conn);
                         server
-                            .execute(Self.serve())
+                            .execute(Self { database_url }.serve())
                             .for_each(|response| async move {
                                 tokio::spawn(response);
                             })
@@ -120,6 +125,9 @@ impl TestBackend for TestService {
         joined_on: NaiveDate,
         created_at: DateTimeUtc,
         is_deleted: bool,
+        nickname: Option<String>,
+        priority: Option<i32>,
+        preferences: Option<Option<String>>,
     ) {
         let mut conn = get_connection().unwrap();
         let utc_now = get_db_utc_now(&mut conn).unwrap();
@@ -131,6 +139,9 @@ impl TestBackend for TestService {
                     first_name,
                     joined_on,
                     created_at,
+                    nickname,
+                    priority,
+                    preferences,
                     is_deleted,
                 },
                 schema::users::last_synced_at.eq(utc_now),
@@ -181,7 +192,8 @@ impl TestBackend for TestService {
         diesel::sql_query(
             "SELECT c.column_name, \
                CASE WHEN pk.column_name IS NOT NULL THEN true ELSE false END AS is_primary_key, \
-               CASE WHEN c.is_nullable = 'YES' THEN true ELSE false END AS is_nullable \
+               CASE WHEN c.is_nullable = 'YES' THEN true ELSE false END AS is_nullable, \
+               c.column_default \
              FROM information_schema.columns c \
              LEFT JOIN ( \
                SELECT kcu.column_name \
@@ -204,7 +216,12 @@ impl TestBackend for TestService {
             name: row.column_name,
             is_primary_key: row.is_primary_key,
             is_nullable: row.is_nullable,
+            column_default: row.column_default,
         })
         .collect()
+    }
+
+    async fn test_helper_get_database_url(self, _: Context) -> String {
+        self.database_url
     }
 }

@@ -14,7 +14,10 @@ async fn test_upload_insert_then_download() {
         username: "sync_user".to_string(),
         first_name: Some("SyncUser".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 8, 1).unwrap(),
-        created_at: carburetor::helpers::get_utc_now(),
+        created_at: Some(carburetor::helpers::get_utc_now()),
+        nickname: None,
+        priority: None,
+        preferences: None,
     })
     .unwrap();
 
@@ -78,6 +81,9 @@ async fn test_upload_update_then_download() {
             carburetor::chrono::NaiveDate::from_ymd_opt(2025, 9, 1).unwrap(),
             carburetor::helpers::get_utc_now(),
             false,
+            None,
+            None,
+            None,
         )
         .await
         .unwrap();
@@ -94,6 +100,9 @@ async fn test_upload_update_then_download() {
         first_name: Some("OriginalUser".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 9, 1).unwrap(),
         created_at: carburetor::helpers::get_utc_now(),
+        nickname: None,
+        priority: None,
+        preferences: None,
         last_synced_at: Some(before_insert),
         is_deleted: false,
         dirty_flag: None,
@@ -112,6 +121,9 @@ async fn test_upload_update_then_download() {
         id: "user-sync-2".to_string(),
         username: Some("updated_user".to_string()),
         first_name: Some(Some("UpdatedUser".to_string())),
+        nickname: None,
+        priority: None,
+        preferences: None,
         joined_on: None,
     })
     .unwrap();

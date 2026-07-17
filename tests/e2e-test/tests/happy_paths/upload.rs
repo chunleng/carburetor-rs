@@ -16,6 +16,9 @@ async fn test_upload_with_no_dirty_record() {
         first_name: Some("NoDirty".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 5, 1).unwrap(),
         created_at: carburetor::helpers::get_utc_now(),
+        nickname: None,
+        priority: None,
+        preferences: None,
         id: "user-clean-1".to_string(),
         last_synced_at: None,
         is_deleted: false,
@@ -60,6 +63,9 @@ async fn test_upload_with_inserted_dirty_record() {
         first_name: Some("NewUser".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 6, 1).unwrap(),
         created_at: carburetor::helpers::get_utc_now(),
+        nickname: None,
+        priority: None,
+        preferences: None,
         id: "user-insert-1".to_string(),
         last_synced_at: None,
         is_deleted: false,
@@ -89,6 +95,11 @@ async fn test_upload_with_inserted_dirty_record() {
             assert_eq!(insert_data.id, dirty_user.id);
             assert_eq!(insert_data.username, "new_user");
             assert_eq!(insert_data.first_name, Some("NewUser".to_string()));
+            assert_eq!(insert_data.joined_on, dirty_user.joined_on);
+            assert_eq!(insert_data.created_at, dirty_user.created_at);
+            assert_eq!(insert_data.nickname, None);
+            assert_eq!(insert_data.priority, 0);
+            assert_eq!(insert_data.preferences, Some("no preference".to_string()));
             assert_eq!(insert_data.is_deleted, false);
         }
         _ => panic!("Expected Insert variant for newly inserted user"),
@@ -149,6 +160,9 @@ async fn test_upload_with_updated_dirty_record() {
             carburetor::chrono::NaiveDate::from_ymd_opt(2025, 7, 1).unwrap(),
             carburetor::helpers::get_utc_now(),
             false,
+            None,
+            None,
+            None,
         )
         .await
         .unwrap();
@@ -161,6 +175,9 @@ async fn test_upload_with_updated_dirty_record() {
         first_name: Some("UpdatedUser".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 7, 1).unwrap(),
         created_at: carburetor::helpers::get_utc_now(),
+        nickname: None,
+        priority: None,
+        preferences: None,
         id: "user-update-1".to_string(),
         last_synced_at: None,
         is_deleted: false,

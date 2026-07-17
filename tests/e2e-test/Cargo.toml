@@ -4,9 +4,10 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-carburetor = { workspace = true }
+carburetor = { workspace = true, features = ["migration"] }
 diesel = { workspace = true, features = [
     "sqlite",
+    "postgres",
     "returning_clauses_for_sqlite_3_35",
 ] }
 nix = { version = "0.29", features = ["signal", "process"] }
