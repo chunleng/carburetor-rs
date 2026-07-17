@@ -4,6 +4,7 @@ pub struct ColumnDef {
     pub sql_type: &'static str,
     pub primary_key: bool,
     pub null: bool,
+    pub default: Option<String>,
 }
 
 #[cfg(for_backend)]
@@ -15,6 +16,9 @@ impl ColumnDef {
         }
         if !self.null {
             def.push_str(" NOT NULL");
+        }
+        if let Some(ref default) = self.default {
+            def.push_str(&format!(" DEFAULT {}", default));
         }
         def
     }

@@ -4,7 +4,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 use crate::parsers::table::CarburetorTable;
-use crate::parsers::table::column::{CarburetorColumnType, ColumnScope};
+use crate::parsers::table::column::{CarburetorColumnType, ColumnScope, DefaultValue, SqlDefault};
 use crate::parsers::table::postgres_type::DieselPostgresType;
 
 fn column_def(column: &Rc<crate::parsers::table::column::CarburetorColumn>) -> Option<TokenStream> {
@@ -17,14 +17,42 @@ fn column_def(column: &Rc<crate::parsers::table::column::CarburetorColumn>) -> O
     let primary_key = matches!(column.column_type, CarburetorColumnType::Id);
     let null = matches!(&column.diesel_type, DieselPostgresType::Generic1(_, _));
 
+    let default_str = column.default_value.as_ref().and_then(|dv| match dv {
+        DefaultValue::Sql(sql_default) => {
+            Some(sql_default_to_ddl(sql_default, &column.diesel_type))
+        }
+        DefaultValue::Rust(_) => None,
+    });
+
+    let default_tokens = match &default_str {
+        Some(s) => quote! { Some(#s.to_string()) },
+        None => quote! { None },
+    };
+
     Some(quote! {
         carburetor::helpers::migration::ColumnDef {
             name: #name,
             sql_type: #sql_type,
             primary_key: #primary_key,
             null: #null,
+            default: #default_tokens,
         }
     })
+}
+
+fn sql_default_to_ddl(sql_default: &SqlDefault, diesel_type: &DieselPostgresType) -> String {
+    match sql_default {
+        SqlDefault::Null => "NULL".to_string(),
+        SqlDefault::EmptyJson => "'{}'::jsonb".to_string(),
+        SqlDefault::Text(s) => format!("'{}'", s),
+        SqlDefault::Number(n) => n.clone(),
+        SqlDefault::Now => match diesel_type.unwrap_nullable() {
+            DieselPostgresType::Timestamptz | DieselPostgresType::Timestamp => "now()".to_string(),
+            DieselPostgresType::Date => "CURRENT_DATE".to_string(),
+            DieselPostgresType::Time => "CURRENT_TIME".to_string(),
+            _ => unreachable!("type compatibility validated at parse time"),
+        },
+    }
 }
 
 pub(crate) fn generate_run_migrations(tokens: &mut TokenStream, tables: &[Rc<CarburetorTable>]) {
