@@ -4,10 +4,10 @@ use quote::{ToTokens, format_ident, quote};
 use syn::Ident;
 
 use crate::{
-    generators::diesel::models::{AsChangesetModel, AsFullModel, AsModelType},
+    generators::diesel::models::{AsChangesetModel, AsInsertModel, AsModelType},
     parsers::{
         sync_group::{CarburetorSyncGroup, SyncGroupTableConfig},
-        table::column::{BackendOnlyConfig, CarburetorColumnType, ClientOnlyConfig},
+        table::column::{CarburetorColumnType, ColumnScope, DefaultValue},
     },
 };
 
@@ -18,13 +18,23 @@ impl<'a> ToTokens for AsLocalInsertModel<'a> {
         let model_name = self.get_model_name();
         let fields = self.0.reference_table.columns.iter().filter_map(|x| {
             if x.column_type == CarburetorColumnType::Data
-                && x.mod_on_backend_only_config == BackendOnlyConfig::Disabled
+                && x.column_scope != ColumnScope::ModOnBackendOnly
             {
                 let field_name = &x.ident;
                 let field_type = AsModelType(&x.diesel_type);
-                Some(quote! {
-                    pub #field_name: #field_type
-                })
+                // Pad default columns with Option so the caller can omit
+                // them (None = use default). AsModelType already wraps
+                // nullable types in Option<T>, so this yields
+                // Option<Option<T>> for nullable default columns.
+                if x.default_value.is_some() {
+                    Some(quote! {
+                        pub #field_name: Option<#field_type>
+                    })
+                } else {
+                    Some(quote! {
+                        pub #field_name: #field_type
+                    })
+                }
             } else {
                 None
             }
@@ -56,22 +66,18 @@ struct AsLocalInsertToFull<'a>(&'a SyncGroupTableConfig);
 impl<'a> ToTokens for AsLocalInsertToFull<'a> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let local_insert_model_name = AsLocalInsertModel(self.0).get_model_name();
-        let full_model_name = AsFullModel(&self.0.reference_table).get_model_name();
+        let insert_model_name = AsInsertModel(&self.0.reference_table).get_model_name();
         let columns = self
             .0
             .reference_table
             .columns
             .iter()
             .filter_map(|x| {
-                match (
-                    &x.column_type,
-                    &x.client_only_config,
-                    &x.mod_on_backend_only_config,
-                ) {
-                    (&CarburetorColumnType::Data, _, &BackendOnlyConfig::Disabled) => {
+                match (&x.column_type, &x.column_scope, &x.default_value) {
+                    (_, ColumnScope::ModOnBackendOnly, _) => {
                         let field_name = &x.ident;
                         Some(quote! {
-                            #field_name: value.#field_name
+                            #field_name: None
                         })
                     }
                     (&CarburetorColumnType::Id, _, _) => {
@@ -106,16 +112,24 @@ impl<'a> ToTokens for AsLocalInsertToFull<'a> {
                             ).unwrap()
                         })
                     }
-                    (_, ClientOnlyConfig::Enabled { default_value }, _) => {
+                    (_, ColumnScope::Both | ColumnScope::ClientOnly, Some(default)) => {
                         let field_name = &x.ident;
-                        Some(quote! {
-                            #field_name: #default_value
-                        })
+                        match default {
+                            // Rust default: Insert is padded (Option<T>),
+                            // Insertable is not. Unwrap to the default value.
+                            DefaultValue::Rust(x) => Some(quote! {
+                                #field_name: value.#field_name.unwrap_or_else(|| #x)
+                            }),
+                            // Sql default: both sides padded, pass through.
+                            _ => Some(quote! {
+                                #field_name: value.#field_name
+                            }),
+                        }
                     }
-                    (_, _, BackendOnlyConfig::BySqlUtcNow) => {
+                    (&CarburetorColumnType::Data, _, _) => {
                         let field_name = &x.ident;
                         Some(quote! {
-                            #field_name: None
+                            #field_name: value.#field_name
                         })
                     }
                     _ => None,
@@ -123,7 +137,7 @@ impl<'a> ToTokens for AsLocalInsertToFull<'a> {
             })
             .collect::<Vec<_>>();
         tokens.extend(quote! {
-            impl From<#local_insert_model_name> for #full_model_name {
+            impl From<#local_insert_model_name> for #insert_model_name {
                 fn from(value: #local_insert_model_name) -> Self {
                     Self {
                         #(#columns,)*
@@ -147,7 +161,7 @@ impl<'a> ToTokens for AsLocalUpdateModel<'a> {
                     pub #field_name: #field_type
                 })
             } else if x.column_type == CarburetorColumnType::Data
-                && x.mod_on_backend_only_config == BackendOnlyConfig::Disabled
+                && x.column_scope != ColumnScope::ModOnBackendOnly
                 && !x.is_immutable
             {
                 let field_name = &x.ident;
@@ -192,15 +206,14 @@ impl<'a> ToTokens for AsLocalUpdateToChangeset<'a> {
             .reference_table
             .columns
             .iter()
-            .filter_map(|x| {
-                match (
-                    &x.column_type,
-                    &x.client_only_config,
-                    &x.mod_on_backend_only_config,
-                    &x.is_immutable,
-                ) {
-                    (&CarburetorColumnType::Id, _, _, _)
-                    | (&CarburetorColumnType::Data, _, &BackendOnlyConfig::Disabled, false) => {
+            .filter_map(
+                |x| match (&x.column_type, &x.column_scope, &x.is_immutable) {
+                    (&CarburetorColumnType::Id, _, _)
+                    | (
+                        &CarburetorColumnType::Data,
+                        ColumnScope::ClientOnly | ColumnScope::Both,
+                        false,
+                    ) => {
                         let field_name = &x.ident;
                         Some(quote! {
                             #field_name: value.#field_name
@@ -212,8 +225,8 @@ impl<'a> ToTokens for AsLocalUpdateToChangeset<'a> {
                             #field_name: None
                         })
                     }
-                }
-            })
+                },
+            )
             .collect::<Vec<_>>();
         tokens.extend(quote! {
             impl From<#local_update_model_name> for #changeset_model_name {

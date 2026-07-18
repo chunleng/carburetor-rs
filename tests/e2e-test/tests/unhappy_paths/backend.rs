@@ -13,12 +13,15 @@ async fn test_upload_update_record_not_on_backend() {
     let dirty_at = carburetor::helpers::get_utc_now().to_rfc3339();
 
     // Insert a local record with dirty_flag = "update" but it doesn't exist on backend
-    let dirty_user = user_only::FullUser {
+    let dirty_user = user_only::InsertableUser {
         id: "user-nonexistent-1".to_string(),
         username: "ghost_user".to_string(),
         first_name: Some("Ghost".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
         created_at: carburetor::helpers::get_utc_now(),
+        nickname: None,
+        priority: None,
+        preferences: None,
         last_synced_at: None,
         is_deleted: false,
         dirty_flag: Some("update".to_string()),
@@ -36,10 +39,16 @@ async fn test_upload_update_record_not_on_backend() {
     let (cutoff, upload_request) = user_only::retrieve_upload_request().unwrap();
     assert_eq!(upload_request.user.len(), 1);
 
-    let upload_response = backend
-        .process_user_only_upload_request(ctx(), upload_request)
-        .await
-        .unwrap();
+    let upload_response: user_only::UploadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_user_only_upload_request(
+                ctx(),
+                carburetor::serde_json::to_string(&upload_request).unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
 
     assert_eq!(upload_response.user.len(), 1);
     match &upload_response.user[0] {
@@ -69,17 +78,23 @@ async fn test_upload_insert_record_already_exists_on_backend() {
             carburetor::chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
             carburetor::helpers::get_utc_now(),
             false,
+            None,
+            None,
+            None,
         )
         .await
         .unwrap();
 
     // Now try to insert the same record from client
-    let dirty_user = user_only::FullUser {
+    let dirty_user = user_only::InsertableUser {
         id: "user-duplicate-1".to_string(),
         username: "existing_user".to_string(),
         first_name: Some("Existing".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
         created_at: carburetor::helpers::get_utc_now(),
+        nickname: None,
+        priority: None,
+        preferences: None,
         last_synced_at: None,
         is_deleted: false,
         dirty_flag: Some("insert".to_string()),
@@ -97,10 +112,16 @@ async fn test_upload_insert_record_already_exists_on_backend() {
     let (cutoff, upload_request) = user_only::retrieve_upload_request().unwrap();
     assert_eq!(upload_request.user.len(), 1);
 
-    let upload_response = backend
-        .process_user_only_upload_request(ctx(), upload_request)
-        .await
-        .unwrap();
+    let upload_response: user_only::UploadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_user_only_upload_request(
+                ctx(),
+                carburetor::serde_json::to_string(&upload_request).unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
 
     assert_eq!(upload_response.user.len(), 1);
     match &upload_response.user[0] {
@@ -121,7 +142,7 @@ async fn test_upload_insert_message_mismatching_context() {
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
 
-    let dirty_message = all_clients::FullMessage {
+    let dirty_message = all_clients::InsertableMessage {
         id: "msg-reject-1".to_string(),
         recipient_id: "user-1".to_string(),
         subject: "Hello".to_string(),
@@ -141,10 +162,17 @@ async fn test_upload_insert_message_mismatching_context() {
         .unwrap();
 
     let (cutoff, upload_request) = all_clients::retrieve_upload_request().unwrap();
-    let upload_response = backend
-        .process_all_clients_upload_request(ctx(), upload_request, "user-2".to_string())
-        .await
-        .unwrap();
+    let upload_response: all_clients::UploadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_all_clients_upload_request(
+                ctx(),
+                carburetor::serde_json::to_string(&upload_request).unwrap(),
+                "user-2".to_string(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
 
     assert_eq!(upload_response.message.len(), 1);
     match &upload_response.message[0] {
@@ -178,7 +206,7 @@ async fn test_upload_update_message_mismatching_context() {
         .unwrap();
 
     let dirty_at = carburetor::helpers::get_utc_now().to_rfc3339();
-    let dirty_message = all_clients::FullMessage {
+    let dirty_message = all_clients::InsertableMessage {
         id: "msg-update-reject-1".to_string(),
         recipient_id: "user-1".to_string(),
         subject: "Updated subject".to_string(),
@@ -198,10 +226,17 @@ async fn test_upload_update_message_mismatching_context() {
         .unwrap();
 
     let (cutoff, upload_request) = all_clients::retrieve_upload_request().unwrap();
-    let upload_response = backend
-        .process_all_clients_upload_request(ctx(), upload_request, "user-2".to_string())
-        .await
-        .unwrap();
+    let upload_response: all_clients::UploadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_all_clients_upload_request(
+                ctx(),
+                carburetor::serde_json::to_string(&upload_request).unwrap(),
+                "user-2".to_string(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
 
     assert_eq!(upload_response.message.len(), 1);
     match &upload_response.message[0] {

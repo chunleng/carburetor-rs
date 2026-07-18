@@ -3,13 +3,12 @@ use proc_macro2::TokenStream;
 use quote::{ToTokens, quote};
 use syn::{Ident, Path, Type, parse_quote, parse_str};
 
-use crate::generators::diesel::models::backend::AsInsertModel;
 use crate::{
     generators::diesel::schema::AsSchemaTable,
     helpers::{TargetType, get_target_type},
     parsers::table::{
         CarburetorTable,
-        column::{CarburetorColumn, CarburetorColumnType},
+        column::{CarburetorColumn, CarburetorColumnType, ColumnScope, DefaultValue},
         postgres_type::DieselPostgresType,
     },
 };
@@ -64,23 +63,14 @@ impl<'a> ToTokens for AsFullModel<'a> {
                 let name = &x.ident;
                 let ty = AsModelType(&x.diesel_type);
                 match get_target_type() {
-                    TargetType::Backend => {
-                        use crate::parsers::table::column::ClientOnlyConfig;
-                        match x.client_only_config {
-                            ClientOnlyConfig::Enabled { .. } => None,
-                            ClientOnlyConfig::Disabled => Some(quote!(pub #name: #ty)),
-                        }
-                    }
-                    TargetType::Client => {
-                        use crate::parsers::table::column::BackendOnlyConfig;
-
-                        match x.mod_on_backend_only_config {
-                            BackendOnlyConfig::Disabled => Some(quote!(pub #name: #ty)),
-                            // mod_on_backend_only_config on means that value is only changed in the
-                            // server, so it becomes optional
-                            BackendOnlyConfig::BySqlUtcNow => Some(quote!(pub #name: Option<#ty> )),
-                        }
-                    }
+                    TargetType::Backend => match x.column_scope {
+                        ColumnScope::ClientOnly => None,
+                        _ => Some(quote!(pub #name: #ty)),
+                    },
+                    TargetType::Client => match x.column_scope {
+                        ColumnScope::ModOnBackendOnly => Some(quote!(pub #name: Option<#ty> )),
+                        _ => Some(quote!(pub #name: #ty)),
+                    },
                 }
             })
             .collect::<Vec<_>>();
@@ -88,15 +78,7 @@ impl<'a> ToTokens for AsFullModel<'a> {
             table: &self.0,
             prefix: None,
         };
-        let derive_header;
-        match get_target_type() {
-            TargetType::Backend => {
-                derive_header = quote!(#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, diesel::Queryable, diesel::Selectable)])
-            }
-            TargetType::Client => {
-                derive_header = quote!(#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, diesel::Queryable, diesel::Selectable, diesel::Insertable)])
-            }
-        }
+        let derive_header = quote!(#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, diesel::Queryable, diesel::Selectable)]);
 
         tokens.extend(quote! {
             #derive_header
@@ -108,70 +90,85 @@ impl<'a> ToTokens for AsFullModel<'a> {
     }
 }
 
-pub mod backend {
-    use heck::ToUpperCamelCase;
-    use proc_macro2::TokenStream;
-    use quote::{ToTokens, quote};
-    use syn::{Ident, Path, parse_quote, parse_str};
+pub(crate) struct AsInsertModel<'a>(pub(crate) &'a CarburetorTable);
 
-    use crate::{
-        generators::diesel::models::{AsDieselTable, AsModelType},
-        parsers::table::{
-            CarburetorTable,
-            column::{BackendOnlyConfig, ClientOnlyConfig},
-        },
-    };
-
-    pub(crate) struct AsInsertModel<'a>(pub(crate) &'a CarburetorTable);
-
-    impl<'a> AsInsertModel<'a> {
-        pub(crate) fn get_model_name(&self) -> Ident {
-            parse_str::<Ident>(&format!(
-                "Insert{}",
-                self.0.ident.to_string().to_upper_camel_case()
-            ))
-            .unwrap()
-        }
-        pub(crate) fn get_model_name_with_prefix(&self, prefix: &str) -> Path {
-            let model_name = self.get_model_name();
-            let prefix: Path = parse_str(prefix).unwrap();
-            parse_quote!(#prefix::#model_name)
-        }
+impl<'a> AsInsertModel<'a> {
+    pub(crate) fn get_model_name(&self) -> Ident {
+        parse_str::<Ident>(&format!(
+            "Insertable{}",
+            self.0.ident.to_string().to_upper_camel_case()
+        ))
+        .unwrap()
     }
+    pub(crate) fn get_model_name_with_prefix(&self, prefix: &str) -> Path {
+        let model_name = self.get_model_name();
+        let prefix: Path = parse_str(prefix).unwrap();
+        parse_quote!(#prefix::#model_name)
+    }
+}
 
-    impl<'a> ToTokens for AsInsertModel<'a> {
-        fn to_tokens(&self, tokens: &mut TokenStream) {
-            let full_model_name = self.get_model_name();
+impl<'a> ToTokens for AsInsertModel<'a> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let model_name = self.get_model_name();
 
-            let columns = self
-                .0
-                .columns
-                .iter()
-                .filter_map(|x| {
-                    let name = &x.ident;
-                    let ty = AsModelType(&x.diesel_type);
-                    match x.client_only_config {
-                        ClientOnlyConfig::Enabled { .. } => None,
-                        ClientOnlyConfig::Disabled => match x.mod_on_backend_only_config {
-                            BackendOnlyConfig::Disabled => Some(quote!(pub #name: #ty)),
-                            BackendOnlyConfig::BySqlUtcNow => None,
-                        },
-                    }
-                })
-                .collect::<Vec<_>>();
-            let diesel_table = AsDieselTable {
-                table: &self.0,
-                prefix: None,
-            };
-
-            tokens.extend(quote! {
-                #[derive(Debug, Clone, diesel::Insertable)]
-                #diesel_table
-                pub struct #full_model_name {
-                    #(#columns,)*
+        let columns = self
+            .0
+            .columns
+            .iter()
+            .filter_map(|x| {
+                let name = &x.ident;
+                let ty = AsModelType(&x.diesel_type);
+                match get_target_type() {
+                    TargetType::Backend => match x.column_scope {
+                        ColumnScope::Both => {
+                            let is_sql = match x.default_value {
+                                #[cfg(feature = "migration")]
+                                Some(DefaultValue::Sql(_)) => true,
+                                #[cfg(not(feature = "migration"))]
+                                Some(DefaultValue::Sql) => true,
+                                _ => false,
+                            };
+                            if is_sql {
+                                Some(quote!(pub #name: Option<#ty>))
+                            } else {
+                                Some(quote!(pub #name: #ty))
+                            }
+                        }
+                        _ => None,
+                    },
+                    TargetType::Client => match x.column_scope {
+                        ColumnScope::ModOnBackendOnly => Some(quote!(pub #name: Option<#ty>)),
+                        _ => {
+                            let is_sql = match x.default_value {
+                                #[cfg(feature = "migration")]
+                                Some(DefaultValue::Sql(_)) => true,
+                                #[cfg(not(feature = "migration"))]
+                                Some(DefaultValue::Sql) => true,
+                                _ => false,
+                            };
+                            if is_sql {
+                                Some(quote!(pub #name: Option<#ty>))
+                            } else {
+                                Some(quote!(pub #name: #ty))
+                            }
+                        }
+                    },
                 }
-            });
-        }
+            })
+            .collect::<Vec<_>>();
+
+        let diesel_table = AsDieselTable {
+            table: self.0,
+            prefix: None,
+        };
+
+        tokens.extend(quote! {
+            #[derive(Debug, Clone, diesel::Insertable)]
+            #diesel_table
+            pub struct #model_name {
+                #(#columns,)*
+            }
+        });
     }
 }
 
@@ -205,26 +202,19 @@ impl<'a> ToTokens for AsChangesetModel<'a> {
 
                 match get_target_type() {
                     TargetType::Backend => {
-                        use crate::parsers::table::column::ClientOnlyConfig;
-                        match (&x.column_type, &x.client_only_config, &x.is_immutable) {
+                        match (&x.column_type, &x.column_scope, &x.is_immutable) {
                             (CarburetorColumnType::Id, _, _) => Some(quote!(pub #name: #ty)),
-                            (_, ClientOnlyConfig::Enabled { .. }, _) | (_, _, true) => None,
+                            (_, ColumnScope::ClientOnly, _) | (_, _, true) => None,
                             (_, _, _) => Some(quote!(pub #name: Option<#ty>)),
                         }
                     }
-                    TargetType::Client => {
-                        use crate::parsers::table::column::BackendOnlyConfig;
-
-                        match (&x.column_type, &x.mod_on_backend_only_config) {
-                            (CarburetorColumnType::Id, _) => Some(quote!(pub #name: #ty)),
-                            (_, BackendOnlyConfig::Disabled) => {
-                                Some(quote!(pub #name: Option<#ty>))
-                            }
-                            (_, BackendOnlyConfig::BySqlUtcNow) => {
-                                Some(quote!(pub #name: Option<Option<#ty>>))
-                            }
+                    TargetType::Client => match (&x.column_type, &x.column_scope) {
+                        (CarburetorColumnType::Id, _) => Some(quote!(pub #name: #ty)),
+                        (_, ColumnScope::ModOnBackendOnly) => {
+                            Some(quote!(pub #name: Option<Option<#ty>>))
                         }
-                    }
+                        (_, _) => Some(quote!(pub #name: Option<#ty>)),
+                    },
                 }
             })
             .collect::<Vec<_>>();
@@ -280,13 +270,11 @@ impl<'a> ToTokens for AsDieselTable<'a> {
 pub(crate) fn generate_diesel_model(tokens: &mut TokenStream, table: &CarburetorTable) {
     let new_model = AsFullModel(&table);
     let update_model = AsChangesetModel(&table);
+    let insert_model = AsInsertModel(&table);
 
     tokens.extend(quote! {
         #new_model
         #update_model
+        #insert_model
     });
-
-    if get_target_type() == TargetType::Backend {
-        tokens.extend(AsInsertModel(&table).to_token_stream());
-    }
 }

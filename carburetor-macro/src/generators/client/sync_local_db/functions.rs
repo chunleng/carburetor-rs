@@ -6,7 +6,7 @@ use crate::{
     generators::{
         client::models::AsTableMetadata,
         diesel::{
-            models::{AsChangesetModel, AsFullModel},
+            models::{AsChangesetModel, AsFullModel, AsInsertModel},
             schema::AsSchemaTable,
         },
         download::models::{AsDownloadResponseModel, AsDownloadResponseTableModel},
@@ -15,7 +15,7 @@ use crate::{
         sync_group::CarburetorSyncGroup,
         table::{
             CarburetorTable,
-            column::{CarburetorColumnType, ClientOnlyConfig},
+            column::{CarburetorColumnType, ColumnScope},
         },
     },
 };
@@ -41,6 +41,7 @@ impl<'a> ToTokens for AsSyncTableToLocalDbFunction<'a> {
             AsDownloadResponseTableModel(self.sync_group, self.table).get_type();
         let table_name = AsSchemaTable(self.table).get_table_name();
         let full_model_name = AsFullModel(self.table).get_model_name();
+        let insert_model_name = AsInsertModel(self.table).get_model_name();
         let changeset_model_name = AsChangesetModel(self.table).get_model_name();
         let id_column_name = &self.table.sync_metadata_columns.id.ident;
         let last_synced_at_column_name = &self.table.sync_metadata_columns.last_synced_at.ident;
@@ -55,14 +56,14 @@ impl<'a> ToTokens for AsSyncTableToLocalDbFunction<'a> {
         let check_dirty_columns = {
             let columns = self.table.columns.clone();
             columns.into_iter().map(|x| {
-                match (&x.column_type, &x.client_only_config) {
+                match (&x.column_type, &x.column_scope) {
                     // Similar to to AsTableMetadata, we are only interested on non-metadata
                     // columns (data columns) that are synced to the backend eventually
                     // (non-client-only) here.
                     //
                     // Non-data columns (id, last_synced_at, etc.) are used to ensure syncing work,
                     // and client-only data will never need to be synced to the server.
-                    (CarburetorColumnType::Data, ClientOnlyConfig::Disabled) => {
+                    (CarburetorColumnType::Data, ColumnScope::Both | ColumnScope::ModOnBackendOnly) => {
                         let column_name = &x.ident;
                         quote! {
                             if existing_metadata.data.as_ref().and_then(|x| { x.#column_name.as_ref() }).and_then(|x| { x.dirty_at.to_owned() }).is_some() ||
@@ -123,7 +124,7 @@ impl<'a> ToTokens for AsSyncTableToLocalDbFunction<'a> {
                             }
                             None => {
                                 diesel::insert_into(table)
-                                    .values(#full_model_name::from(update_item.clone()))
+                                    .values(#insert_model_name::from(update_item.clone()))
                                     .execute(conn)?;
                             }
                         }

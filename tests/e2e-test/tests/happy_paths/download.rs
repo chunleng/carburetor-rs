@@ -36,6 +36,9 @@ async fn insert_dummy_user(backend: &TestBackendClient, id: &str, is_deleted: bo
             NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
             carburetor::helpers::get_utc_now(),
             is_deleted,
+            None,
+            None,
+            None,
         )
         .await
         .unwrap();
@@ -51,20 +54,32 @@ async fn test_download_from_offset() {
     insert_dummy_user(&backend, "a", false).await;
 
     let req = user_only::retrieve_download_request().unwrap();
-    let res = backend
-        .process_user_only_download_request(ctx(), req)
-        .await
-        .unwrap();
+    let res: user_only::DownloadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_user_only_download_request(
+                ctx(),
+                carburetor::serde_json::to_string(&req).unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq! {res.user.data.len(), 1};
     user_only::store_download_response(res).unwrap();
 
     insert_dummy_user(&backend, "b", false).await;
 
     let req = user_only::retrieve_download_request().unwrap();
-    let res = backend
-        .process_user_only_download_request(ctx(), req)
-        .await
-        .unwrap();
+    let res: user_only::DownloadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_user_only_download_request(
+                ctx(),
+                carburetor::serde_json::to_string(&req).unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq! {res.user.data.len(), 1};
     user_only::store_download_response(res).unwrap();
 
@@ -89,10 +104,16 @@ async fn test_clean_download() {
     insert_dummy_user(&backend, "b", true).await;
 
     let req = user_only::retrieve_download_request().unwrap();
-    let res = backend
-        .process_user_only_download_request(ctx(), req)
-        .await
-        .unwrap();
+    let res: user_only::DownloadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_user_only_download_request(
+                ctx(),
+                carburetor::serde_json::to_string(&req).unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
 
     user_only::store_download_response(res).unwrap();
     let stored_users: Vec<user_only::FullUser> = user_only::users::table
@@ -116,10 +137,17 @@ async fn test_download_only_returns_messages_matching_context() {
     insert_dummy_message(&backend, "msg-c", "user-1", false).await;
 
     let req = all_clients::retrieve_download_request().unwrap();
-    let res = backend
-        .process_all_clients_download_request(ctx(), req, "user-1".to_string())
-        .await
-        .unwrap();
+    let res: all_clients::DownloadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_all_clients_download_request(
+                ctx(),
+                carburetor::serde_json::to_string(&req).unwrap(),
+                "user-1".to_string(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
 
     assert_eq!(res.message.data.len(), 2);
     assert!(res.message.data.iter().any(

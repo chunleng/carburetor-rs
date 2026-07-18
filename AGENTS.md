@@ -35,19 +35,29 @@ Clients work offline using generated per-table functions: `insert_<table>()`,
 
 ## Commands
 
+### Test & Check
+
 ```bash
 # E2E testing
 # Tests share single SQLite DB singleton; --test-threads=1 required
 # Build sample-test-backend first to avoid slow server launch → test failures
 cargo build -p sample-test-backend && CARBURETOR_TARGET=client cargo test -p e2e-test -- --test-threads=1
 
-# Build & Run - Backend
-cargo check
+# Backend
+cargo build -p carburetor --features=diesel/postgres
+
+# Client
+CARBURETOR_TARGET=client cargo build -p carburetor --features=diesel/sqlite --features=migration
+```
+
+### Other Useful Commands
+
+```bash
+# Backend
 cargo run --example simple-backend --features backend
 cargo expand --example simple-backend --features backend
 
-# Build & Run - Client
-CARBURETOR_TARGET=client cargo check
+# Client
 CARBURETOR_TARGET=client cargo run --example simple-client --features client
 CARBURETOR_TARGET=client cargo expand --example simple-client --features client
 ```

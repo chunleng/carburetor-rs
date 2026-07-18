@@ -9,7 +9,7 @@ use crate::{
             models::AsTableMetadata,
         },
         diesel::{
-            models::{AsChangesetModel, AsFullModel, AsModelType},
+            models::{AsChangesetModel, AsFullModel, AsInsertModel, AsModelType},
             schema::AsSchemaTable,
         },
     },
@@ -24,15 +24,16 @@ struct AsLocalInsertFunction<'a>(&'a SyncGroupTableConfig);
 impl<'a> ToTokens for AsLocalInsertFunction<'a> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let function_name = self.get_function_name();
-        let insert_model_name = AsLocalInsertModel(self.0).get_model_name();
+        let local_insert_model_name = AsLocalInsertModel(self.0).get_model_name();
+        let insert_model_name = AsInsertModel(&self.0.reference_table).get_model_name();
         let full_model_name = AsFullModel(&self.0.reference_table).get_model_name();
         let table_name = AsSchemaTable(&self.0.reference_table).get_table_name();
         tokens.extend(quote!(
-            pub fn #function_name(insert_value: #insert_model_name) -> carburetor::error::Result<#full_model_name> {
+            pub fn #function_name(insert_value: #local_insert_model_name) -> carburetor::error::Result<#full_model_name> {
                 use diesel::{RunQueryDsl, Connection};
                 Ok(
                     diesel::insert_into(#table_name::table)
-                        .values(#full_model_name::from(insert_value))
+                        .values(#insert_model_name::from(insert_value))
                         .get_result(&mut carburetor::helpers::get_connection()?)
                         .map_err(|e| carburetor::error::Error::Unhandled {
                             message: "record insertion failed".to_string(),

@@ -37,6 +37,15 @@ pub(crate) enum DieselPostgresGeneric1Type {
 }
 
 impl DieselPostgresType {
+    /// Unwraps a `Nullable<T>` type to get `T`, or returns `self` if not
+    /// nullable.
+    pub(crate) fn unwrap_nullable(&self) -> &DieselPostgresType {
+        match self {
+            DieselPostgresType::Generic1(DieselPostgresGeneric1Type::Nullable, inner) => inner,
+            _ => self,
+        }
+    }
+
     pub(crate) fn get_model_type_string(&self) -> String {
         match self {
             DieselPostgresType::Text => "String".to_string(),

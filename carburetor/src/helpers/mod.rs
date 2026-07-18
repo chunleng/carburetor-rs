@@ -3,6 +3,9 @@ pub mod carburetor_offset;
 #[cfg(for_client)]
 pub mod client_sync_metadata;
 
+#[cfg(for_backend)]
+pub mod serde_optional;
+
 #[cfg(feature = "migration")]
 pub mod migration;
 

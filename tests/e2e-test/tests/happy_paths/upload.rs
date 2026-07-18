@@ -11,11 +11,14 @@ async fn test_upload_with_no_dirty_record() {
     let backend = backend_server.client().await;
 
     // Insert a clean (non-dirty) user record
-    let clean_user = user_only::FullUser {
+    let clean_user = user_only::InsertableUser {
         username: "clean_user".to_string(),
         first_name: Some("NoDirty".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 5, 1).unwrap(),
         created_at: carburetor::helpers::get_utc_now(),
+        nickname: None,
+        priority: None,
+        preferences: None,
         id: "user-clean-1".to_string(),
         last_synced_at: None,
         is_deleted: false,
@@ -35,10 +38,16 @@ async fn test_upload_with_no_dirty_record() {
     );
 
     // Send to backend and get response
-    let upload_response = backend
-        .process_user_only_upload_request(ctx(), upload_request)
-        .await
-        .unwrap();
+    let upload_response: user_only::UploadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_user_only_upload_request(
+                ctx(),
+                carburetor::serde_json::to_string(&upload_request).unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
     assert!(
         upload_response.user.is_empty(),
         "Backend should return empty response for no dirty records"
@@ -55,11 +64,14 @@ async fn test_upload_with_inserted_dirty_record() {
     let backend = backend_server.client().await;
 
     // Insert a user with dirty flag set to "insert"
-    let dirty_user = user_only::FullUser {
+    let dirty_user = user_only::InsertableUser {
         username: "new_user".to_string(),
         first_name: Some("NewUser".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 6, 1).unwrap(),
         created_at: carburetor::helpers::get_utc_now(),
+        nickname: None,
+        priority: None,
+        preferences: None,
         id: "user-insert-1".to_string(),
         last_synced_at: None,
         is_deleted: false,
@@ -89,16 +101,27 @@ async fn test_upload_with_inserted_dirty_record() {
             assert_eq!(insert_data.id, dirty_user.id);
             assert_eq!(insert_data.username, "new_user");
             assert_eq!(insert_data.first_name, Some("NewUser".to_string()));
+            assert_eq!(insert_data.joined_on, dirty_user.joined_on);
+            assert_eq!(insert_data.created_at, dirty_user.created_at);
+            assert_eq!(insert_data.nickname, None);
+            assert_eq!(insert_data.priority, 0);
+            assert_eq!(insert_data.preferences, Some("no preference".to_string()));
             assert_eq!(insert_data.is_deleted, false);
         }
         _ => panic!("Expected Insert variant for newly inserted user"),
     }
 
     // Send to backend and get response
-    let upload_response = backend
-        .process_user_only_upload_request(ctx(), upload_request)
-        .await
-        .unwrap();
+    let upload_response: user_only::UploadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_user_only_upload_request(
+                ctx(),
+                carburetor::serde_json::to_string(&upload_request).unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq!(
         upload_response.user.len(),
         1,
@@ -149,6 +172,9 @@ async fn test_upload_with_updated_dirty_record() {
             carburetor::chrono::NaiveDate::from_ymd_opt(2025, 7, 1).unwrap(),
             carburetor::helpers::get_utc_now(),
             false,
+            None,
+            None,
+            None,
         )
         .await
         .unwrap();
@@ -156,11 +182,14 @@ async fn test_upload_with_updated_dirty_record() {
     let dirty_at = carburetor::helpers::get_utc_now().to_rfc3339();
 
     // Insert a user with dirty flag set to "update" with column-level metadata
-    let dirty_user = user_only::FullUser {
+    let dirty_user = user_only::InsertableUser {
         username: "updated_user".to_string(),
         first_name: Some("UpdatedUser".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 7, 1).unwrap(),
         created_at: carburetor::helpers::get_utc_now(),
+        nickname: None,
+        priority: None,
+        preferences: None,
         id: "user-update-1".to_string(),
         last_synced_at: None,
         is_deleted: false,
@@ -203,10 +232,16 @@ async fn test_upload_with_updated_dirty_record() {
     }
 
     // Send to backend and get response
-    let upload_response = backend
-        .process_user_only_upload_request(ctx(), upload_request)
-        .await
-        .unwrap();
+    let upload_response: user_only::UploadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_user_only_upload_request(
+                ctx(),
+                carburetor::serde_json::to_string(&upload_request).unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq!(
         upload_response.user.len(),
         1,
@@ -289,7 +324,7 @@ async fn test_upload_update_message_matching_context() {
 
     let dirty_at = carburetor::helpers::get_utc_now().to_rfc3339();
 
-    let dirty_message = all_clients::FullMessage {
+    let dirty_message = all_clients::InsertableMessage {
         id: "msg-update-1".to_string(),
         recipient_id: "user-1".to_string(),
         subject: "Updated Subject".to_string(),
@@ -311,10 +346,17 @@ async fn test_upload_update_message_matching_context() {
     let (cutoff, upload_request) = all_clients::retrieve_upload_request().unwrap();
     assert_eq!(upload_request.message.len(), 1);
 
-    let upload_response = backend
-        .process_all_clients_upload_request(ctx(), upload_request, "user-1".to_string())
-        .await
-        .unwrap();
+    let upload_response: all_clients::UploadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_all_clients_upload_request(
+                ctx(),
+                carburetor::serde_json::to_string(&upload_request).unwrap(),
+                "user-1".to_string(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
 
     assert_eq!(upload_response.message.len(), 1);
     match &upload_response.message[0] {
@@ -340,7 +382,7 @@ async fn test_upload_insert_message_matching_context() {
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
 
-    let dirty_message = all_clients::FullMessage {
+    let dirty_message = all_clients::InsertableMessage {
         id: "msg-insert-1".to_string(),
         recipient_id: "user-1".to_string(),
         subject: "Hello".to_string(),
@@ -362,10 +404,17 @@ async fn test_upload_insert_message_matching_context() {
     let (cutoff, upload_request) = all_clients::retrieve_upload_request().unwrap();
     assert_eq!(upload_request.message.len(), 1);
 
-    let upload_response = backend
-        .process_all_clients_upload_request(ctx(), upload_request, "user-1".to_string())
-        .await
-        .unwrap();
+    let upload_response: all_clients::UploadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_all_clients_upload_request(
+                ctx(),
+                carburetor::serde_json::to_string(&upload_request).unwrap(),
+                "user-1".to_string(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
 
     assert_eq!(upload_response.message.len(), 1);
     match &upload_response.message[0] {

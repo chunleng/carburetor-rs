@@ -19,6 +19,9 @@ async fn test_download_between_upload_process_and_store() {
             carburetor::chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
             carburetor::helpers::get_utc_now(),
             false,
+            None,
+            None,
+            None,
         )
         .await
         .unwrap();
@@ -28,12 +31,15 @@ async fn test_download_between_upload_process_and_store() {
         .await
         .unwrap();
 
-    let synced_user = user_only::FullUser {
+    let synced_user = user_only::InsertableUser {
         id: "user-interject-1".to_string(),
         username: "original".to_string(),
         first_name: Some("Original".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
         created_at: carburetor::helpers::get_utc_now(),
+        nickname: None,
+        priority: None,
+        preferences: None,
         last_synced_at: Some(before_seed),
         is_deleted: false,
         dirty_flag: None,
@@ -50,6 +56,9 @@ async fn test_download_between_upload_process_and_store() {
         id: "user-interject-1".to_string(),
         username: Some("updated".to_string()),
         first_name: None,
+        nickname: None,
+        priority: None,
+        preferences: None,
         joined_on: None,
     })
     .unwrap();
@@ -59,19 +68,31 @@ async fn test_download_between_upload_process_and_store() {
     assert_eq!(upload_request.user.len(), 1);
 
     // Backend processes the upload (record is now updated on backend, last_synced_at=T_backend)
-    let upload_response = backend
-        .process_user_only_upload_request(ctx(), upload_request)
-        .await
-        .unwrap();
+    let upload_response: user_only::UploadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_user_only_upload_request(
+                ctx(),
+                carburetor::serde_json::to_string(&upload_request).unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq!(upload_response.user.len(), 1);
     assert!(upload_response.user[0].is_ok());
 
     // --- Interject: download before store_upload_response is called ---
     let download_request = user_only::retrieve_download_request().unwrap();
-    let download_response = backend
-        .process_user_only_download_request(ctx(), download_request)
-        .await
-        .unwrap();
+    let download_response: user_only::DownloadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_user_only_download_request(
+                ctx(),
+                carburetor::serde_json::to_string(&download_request).unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq! {download_response.user.data.len(), 1};
 
     // Store the download — LWW must not clobber the still-dirty local state

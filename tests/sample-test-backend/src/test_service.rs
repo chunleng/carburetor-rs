@@ -2,12 +2,12 @@ use carburetor::{
     chrono::{DateTimeUtc, NaiveDate},
     helpers::{get_connection, get_db_utc_now},
 };
-use diesel::{dsl::insert_into, ExpressionMethods, QueryDsl, QueryableByName, RunQueryDsl};
+use diesel::{ExpressionMethods, QueryDsl, QueryableByName, RunQueryDsl, dsl::insert_into};
 use futures::StreamExt;
 use sample_test_core::{
+    ColumnMeta,
     backend_service::TestBackend,
     schema::{self, all_clients, user_only},
-    ColumnMeta,
 };
 use tarpc::{context::Context, server::Channel};
 use tokio::signal::unix::{SignalKind, signal};
@@ -20,13 +20,17 @@ struct ColumnRow {
     is_primary_key: bool,
     #[diesel(sql_type = diesel::sql_types::Bool)]
     is_nullable: bool,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
+    column_default: Option<String>,
 }
 
 #[derive(Debug, Clone)]
-pub struct TestService;
+pub struct TestService {
+    database_url: String,
+}
 
 impl TestService {
-    pub async fn start(port: u16) {
+    pub async fn start(port: u16, database_url: String) {
         let mut listener = tarpc::serde_transport::tcp::listen(
             format!("127.0.0.1:{}", port),
             tarpc::tokio_serde::formats::Bincode::default,
@@ -53,10 +57,11 @@ impl TestService {
                         }
                     };
 
+                    let database_url = database_url.clone();
                     tokio::spawn(async move {
                         let server = tarpc::server::BaseChannel::with_defaults(conn);
                         server
-                            .execute(Self.serve())
+                            .execute(Self { database_url }.serve())
                             .for_each(|response| async move {
                                 tokio::spawn(response);
                             })
@@ -71,44 +76,48 @@ impl TestService {
 }
 
 impl TestBackend for TestService {
-    async fn process_user_only_download_request(
-        self,
-        _: Context,
-        request: Option<user_only::DownloadRequest>,
-    ) -> user_only::DownloadResponse {
-        user_only::process_download_request(request).unwrap()
+    async fn process_user_only_download_request(self, _: Context, request_json: String) -> String {
+        let request: Option<user_only::DownloadRequest> =
+            carburetor::serde_json::from_str(&request_json).unwrap();
+        let response = user_only::process_download_request(request).unwrap();
+        carburetor::serde_json::to_string(&response).unwrap()
     }
 
-    async fn process_user_only_upload_request(
-        self,
-        _: Context,
-        request: user_only::UploadRequest,
-    ) -> user_only::UploadResponse {
-        user_only::process_upload_request(request).unwrap()
+    async fn process_user_only_upload_request(self, _: Context, request_json: String) -> String {
+        let request: user_only::UploadRequest =
+            carburetor::serde_json::from_str(&request_json).unwrap();
+        let response = user_only::process_upload_request(request).unwrap();
+        carburetor::serde_json::to_string(&response).unwrap()
     }
 
     async fn process_all_clients_download_request(
         self,
         _: Context,
-        request: Option<all_clients::DownloadRequest>,
+        request_json: String,
         context_user_id: String,
-    ) -> all_clients::DownloadResponse {
+    ) -> String {
+        let request: Option<all_clients::DownloadRequest> =
+            carburetor::serde_json::from_str(&request_json).unwrap();
         let context = all_clients::SyncContext {
             user_id: context_user_id,
         };
-        all_clients::process_download_request(request, &context).unwrap()
+        let response = all_clients::process_download_request(request, &context).unwrap();
+        carburetor::serde_json::to_string(&response).unwrap()
     }
 
     async fn process_all_clients_upload_request(
         self,
         _: Context,
-        request: all_clients::UploadRequest,
+        request_json: String,
         context_user_id: String,
-    ) -> all_clients::UploadResponse {
+    ) -> String {
+        let request: all_clients::UploadRequest =
+            carburetor::serde_json::from_str(&request_json).unwrap();
         let context = all_clients::SyncContext {
             user_id: context_user_id,
         };
-        all_clients::process_upload_request(request, &context).unwrap()
+        let response = all_clients::process_upload_request(request, &context).unwrap();
+        carburetor::serde_json::to_string(&response).unwrap()
     }
 
     async fn test_helper_insert_user(
@@ -120,17 +129,23 @@ impl TestBackend for TestService {
         joined_on: NaiveDate,
         created_at: DateTimeUtc,
         is_deleted: bool,
+        nickname: Option<String>,
+        priority: Option<i32>,
+        preferences: Option<Option<String>>,
     ) {
         let mut conn = get_connection().unwrap();
         let utc_now = get_db_utc_now(&mut conn).unwrap();
         insert_into(schema::users::table)
             .values((
-                schema::InsertUser {
+                schema::InsertableUser {
                     id,
                     username,
                     first_name,
                     joined_on,
                     created_at,
+                    nickname,
+                    priority,
+                    preferences,
                     is_deleted,
                 },
                 schema::users::last_synced_at.eq(utc_now),
@@ -152,7 +167,7 @@ impl TestBackend for TestService {
         let utc_now = get_db_utc_now(&mut conn).unwrap();
         insert_into(schema::messages::table)
             .values((
-                schema::InsertMessage {
+                schema::InsertableMessage {
                     id,
                     recipient_id,
                     subject,
@@ -181,7 +196,8 @@ impl TestBackend for TestService {
         diesel::sql_query(
             "SELECT c.column_name, \
                CASE WHEN pk.column_name IS NOT NULL THEN true ELSE false END AS is_primary_key, \
-               CASE WHEN c.is_nullable = 'YES' THEN true ELSE false END AS is_nullable \
+               CASE WHEN c.is_nullable = 'YES' THEN true ELSE false END AS is_nullable, \
+               c.column_default \
              FROM information_schema.columns c \
              LEFT JOIN ( \
                SELECT kcu.column_name \
@@ -198,13 +214,18 @@ impl TestBackend for TestService {
         .bind::<diesel::sql_types::Text, _>(&table_name)
         .bind::<diesel::sql_types::Text, _>(&table_name)
         .load::<ColumnRow>(&mut get_connection().unwrap())
-            .unwrap()
-            .into_iter()
-            .map(|row| ColumnMeta {
-                name: row.column_name,
-                is_primary_key: row.is_primary_key,
-                is_nullable: row.is_nullable,
-            })
-            .collect()
+        .unwrap()
+        .into_iter()
+        .map(|row| ColumnMeta {
+            name: row.column_name,
+            is_primary_key: row.is_primary_key,
+            is_nullable: row.is_nullable,
+            column_default: row.column_default,
+        })
+        .collect()
+    }
+
+    async fn test_helper_get_database_url(self, _: Context) -> String {
+        self.database_url
     }
 }

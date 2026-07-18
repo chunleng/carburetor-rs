@@ -14,7 +14,10 @@ async fn test_upload_insert_and_update_between_retrieve_and_store() {
         username: "user_v1".to_string(),
         first_name: Some("V1".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
-        created_at: carburetor::helpers::get_utc_now(),
+        created_at: Some(carburetor::helpers::get_utc_now()),
+        nickname: None,
+        priority: None,
+        preferences: None,
     })
     .unwrap();
 
@@ -27,15 +30,24 @@ async fn test_upload_insert_and_update_between_retrieve_and_store() {
         id: inserted.id.clone(),
         username: Some("user_v2".to_string()),
         first_name: None,
+        nickname: None,
+        priority: None,
+        preferences: None,
         joined_on: None,
     })
     .unwrap();
 
     // Send original upload request to backend (backend processes the insert)
-    let upload_response = backend
-        .process_user_only_upload_request(ctx(), upload_request)
-        .await
-        .unwrap();
+    let upload_response: user_only::UploadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_user_only_upload_request(
+                ctx(),
+                carburetor::serde_json::to_string(&upload_request).unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq!(upload_response.user.len(), 1);
     assert!(upload_response.user[0].is_ok());
 
@@ -72,6 +84,9 @@ async fn test_upload_update_and_update_same_column_between_retrieve_and_store() 
             carburetor::chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
             carburetor::helpers::get_utc_now(),
             false,
+            None,
+            None,
+            None,
         )
         .await
         .unwrap();
@@ -81,12 +96,15 @@ async fn test_upload_update_and_update_same_column_between_retrieve_and_store() 
         .await
         .unwrap();
 
-    let synced_user = user_only::FullUser {
+    let synced_user = user_only::InsertableUser {
         id: "user-edge-1".to_string(),
         username: "original".to_string(),
         first_name: Some("Original".to_string()),
         joined_on: carburetor::chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
         created_at: carburetor::helpers::get_utc_now(),
+        nickname: None,
+        priority: None,
+        preferences: None,
         last_synced_at: Some(before_seed),
         is_deleted: false,
         dirty_flag: None,
@@ -102,6 +120,9 @@ async fn test_upload_update_and_update_same_column_between_retrieve_and_store() 
         id: "user-edge-1".to_string(),
         username: Some("updated_v1".to_string()),
         first_name: None,
+        nickname: None,
+        priority: None,
+        preferences: None,
         joined_on: None,
     })
     .unwrap();
@@ -115,15 +136,24 @@ async fn test_upload_update_and_update_same_column_between_retrieve_and_store() 
         id: "user-edge-1".to_string(),
         username: Some("updated_v2".to_string()),
         first_name: None,
+        nickname: None,
+        priority: None,
+        preferences: None,
         joined_on: None,
     })
     .unwrap();
 
     // Send first update to backend
-    let upload_response = backend
-        .process_user_only_upload_request(ctx(), upload_request)
-        .await
-        .unwrap();
+    let upload_response: user_only::UploadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_user_only_upload_request(
+                ctx(),
+                carburetor::serde_json::to_string(&upload_request).unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq!(upload_response.user.len(), 1);
     assert!(upload_response.user[0].is_ok());
 

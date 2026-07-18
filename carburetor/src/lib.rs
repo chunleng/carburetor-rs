@@ -14,7 +14,7 @@ pub mod chrono {
 // Re-export serde_json so that user can use Value type for model without adding to their
 // dependencies
 pub mod serde_json {
-    pub use serde_json::{Value, from_str, from_value};
+    pub use serde_json::{Value, from_str, from_value, to_string, to_value};
 }
 
 pub use prelude::*;
