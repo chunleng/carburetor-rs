@@ -44,7 +44,7 @@ fn sql_default_to_ddl(sql_default: &SqlDefault, diesel_type: &DieselPostgresType
     match sql_default {
         SqlDefault::Null => "NULL".to_string(),
         SqlDefault::EmptyJson => "'{}'::jsonb".to_string(),
-        SqlDefault::Text(s) => format!("'{}'", s),
+        SqlDefault::Text(s) => format!("'{}'", s.replace("'", "''")),
         SqlDefault::Number(n) => n.clone(),
         SqlDefault::Now => match diesel_type.unwrap_nullable() {
             DieselPostgresType::Timestamptz | DieselPostgresType::Timestamp => "now()".to_string(),
@@ -86,4 +86,29 @@ pub(crate) fn generate_run_migrations(tokens: &mut TokenStream, tables: &[Rc<Car
             )
         }
     });
+}
+
+#[cfg(all(test, feature = "migration"))]
+mod tests {
+    use super::*;
+    use crate::parsers::table::column::SqlDefault;
+    use crate::parsers::table::postgres_type::DieselPostgresType;
+
+    #[test]
+    fn text_default_with_apostrophe_is_escaped() {
+        let result = sql_default_to_ddl(
+            &SqlDefault::Text("it's a test".to_string()),
+            &DieselPostgresType::Text,
+        );
+        assert_eq!(result, "'it''s a test'");
+    }
+
+    #[test]
+    fn text_default_without_apostrophe_unaffected() {
+        let result = sql_default_to_ddl(
+            &SqlDefault::Text("no preference".to_string()),
+            &DieselPostgresType::Text,
+        );
+        assert_eq!(result, "'no preference'");
+    }
 }
