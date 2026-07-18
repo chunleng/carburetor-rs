@@ -37,6 +37,7 @@ impl TryFrom<DieselTableStyleContent> for CarburetorColumn {
         let mut column_scope = ColumnScope::default();
         let mut default_value = None;
         let mut is_immutable = false;
+        let mut has_user_default = false;
 
         for attr in value.attrs.iter() {
             // Handle #[default(...)] — Meta::List with nested name-value or bare path
@@ -48,6 +49,7 @@ impl TryFrom<DieselTableStyleContent> for CarburetorColumn {
                             "multiple `#[default]` tags are not allowed on a single column",
                         ));
                     }
+                    has_user_default = true;
                     let meta = list.parse_args::<Meta>()?;
                     match meta {
                         Meta::NameValue(nv) => {
@@ -194,6 +196,14 @@ impl TryFrom<DieselTableStyleContent> for CarburetorColumn {
                 }
                 _ => {}
             }
+        }
+        if has_user_default && column_type != CarburetorColumnType::Data {
+            return Err(Error::new_spanned(
+                value.name,
+                "`#[default]` cannot be applied to special columns \
+                 (#[id], #[last_synced_at], #[is_deleted], #[dirty_flag], \
+                 #[client_column_sync_metadata])",
+            ));
         }
         if is_immutable && column_type != CarburetorColumnType::Data {
             return Err(Error::new_spanned(
