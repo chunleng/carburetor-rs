@@ -209,7 +209,7 @@ Several built-in column attributes (documented in [basic feature](./basic-featur
 | `#[dirty_flag]` | `Null` |
 | `#[client_column_sync_metadata]` | `EmptyJson` |
 
-Applying `#[default]` to these columns is a **compile-time error** — their defaults are intrinsic. Regular data columns (`#[id]`, `#[is_deleted]`, and unmarked columns) accept `#[default]`.
+Applying `#[default]` to these columns is a **compile-time error** — their defaults are intrinsic. Unmarked data columns accept `#[default]`.
 
 ## Challenges and Considerations
 
