@@ -76,44 +76,48 @@ impl TestService {
 }
 
 impl TestBackend for TestService {
-    async fn process_user_only_download_request(
-        self,
-        _: Context,
-        request: Option<user_only::DownloadRequest>,
-    ) -> user_only::DownloadResponse {
-        user_only::process_download_request(request).unwrap()
+    async fn process_user_only_download_request(self, _: Context, request_json: String) -> String {
+        let request: Option<user_only::DownloadRequest> =
+            carburetor::serde_json::from_str(&request_json).unwrap();
+        let response = user_only::process_download_request(request).unwrap();
+        carburetor::serde_json::to_string(&response).unwrap()
     }
 
-    async fn process_user_only_upload_request(
-        self,
-        _: Context,
-        request: user_only::UploadRequest,
-    ) -> user_only::UploadResponse {
-        user_only::process_upload_request(request).unwrap()
+    async fn process_user_only_upload_request(self, _: Context, request_json: String) -> String {
+        let request: user_only::UploadRequest =
+            carburetor::serde_json::from_str(&request_json).unwrap();
+        let response = user_only::process_upload_request(request).unwrap();
+        carburetor::serde_json::to_string(&response).unwrap()
     }
 
     async fn process_all_clients_download_request(
         self,
         _: Context,
-        request: Option<all_clients::DownloadRequest>,
+        request_json: String,
         context_user_id: String,
-    ) -> all_clients::DownloadResponse {
+    ) -> String {
+        let request: Option<all_clients::DownloadRequest> =
+            carburetor::serde_json::from_str(&request_json).unwrap();
         let context = all_clients::SyncContext {
             user_id: context_user_id,
         };
-        all_clients::process_download_request(request, &context).unwrap()
+        let response = all_clients::process_download_request(request, &context).unwrap();
+        carburetor::serde_json::to_string(&response).unwrap()
     }
 
     async fn process_all_clients_upload_request(
         self,
         _: Context,
-        request: all_clients::UploadRequest,
+        request_json: String,
         context_user_id: String,
-    ) -> all_clients::UploadResponse {
+    ) -> String {
+        let request: all_clients::UploadRequest =
+            carburetor::serde_json::from_str(&request_json).unwrap();
         let context = all_clients::SyncContext {
             user_id: context_user_id,
         };
-        all_clients::process_upload_request(request, &context).unwrap()
+        let response = all_clients::process_upload_request(request, &context).unwrap();
+        carburetor::serde_json::to_string(&response).unwrap()
     }
 
     async fn test_helper_insert_user(

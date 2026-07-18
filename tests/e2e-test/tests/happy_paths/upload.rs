@@ -38,10 +38,16 @@ async fn test_upload_with_no_dirty_record() {
     );
 
     // Send to backend and get response
-    let upload_response = backend
-        .process_user_only_upload_request(ctx(), upload_request)
-        .await
-        .unwrap();
+    let upload_response: user_only::UploadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_user_only_upload_request(
+                ctx(),
+                carburetor::serde_json::to_string(&upload_request).unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
     assert!(
         upload_response.user.is_empty(),
         "Backend should return empty response for no dirty records"
@@ -106,10 +112,16 @@ async fn test_upload_with_inserted_dirty_record() {
     }
 
     // Send to backend and get response
-    let upload_response = backend
-        .process_user_only_upload_request(ctx(), upload_request)
-        .await
-        .unwrap();
+    let upload_response: user_only::UploadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_user_only_upload_request(
+                ctx(),
+                carburetor::serde_json::to_string(&upload_request).unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq!(
         upload_response.user.len(),
         1,
@@ -220,10 +232,16 @@ async fn test_upload_with_updated_dirty_record() {
     }
 
     // Send to backend and get response
-    let upload_response = backend
-        .process_user_only_upload_request(ctx(), upload_request)
-        .await
-        .unwrap();
+    let upload_response: user_only::UploadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_user_only_upload_request(
+                ctx(),
+                carburetor::serde_json::to_string(&upload_request).unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq!(
         upload_response.user.len(),
         1,
@@ -328,10 +346,17 @@ async fn test_upload_update_message_matching_context() {
     let (cutoff, upload_request) = all_clients::retrieve_upload_request().unwrap();
     assert_eq!(upload_request.message.len(), 1);
 
-    let upload_response = backend
-        .process_all_clients_upload_request(ctx(), upload_request, "user-1".to_string())
-        .await
-        .unwrap();
+    let upload_response: all_clients::UploadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_all_clients_upload_request(
+                ctx(),
+                carburetor::serde_json::to_string(&upload_request).unwrap(),
+                "user-1".to_string(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
 
     assert_eq!(upload_response.message.len(), 1);
     match &upload_response.message[0] {
@@ -379,10 +404,17 @@ async fn test_upload_insert_message_matching_context() {
     let (cutoff, upload_request) = all_clients::retrieve_upload_request().unwrap();
     assert_eq!(upload_request.message.len(), 1);
 
-    let upload_response = backend
-        .process_all_clients_upload_request(ctx(), upload_request, "user-1".to_string())
-        .await
-        .unwrap();
+    let upload_response: all_clients::UploadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_all_clients_upload_request(
+                ctx(),
+                carburetor::serde_json::to_string(&upload_request).unwrap(),
+                "user-1".to_string(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
 
     assert_eq!(upload_response.message.len(), 1);
     match &upload_response.message[0] {

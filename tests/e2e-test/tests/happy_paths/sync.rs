@@ -25,10 +25,16 @@ async fn test_upload_insert_then_download() {
     let (upload_cutoff, upload_request) = user_only::retrieve_upload_request().unwrap();
     assert_eq!(upload_request.user.len(), 1);
 
-    let upload_response = backend
-        .process_user_only_upload_request(ctx(), upload_request)
-        .await
-        .unwrap();
+    let upload_response: user_only::UploadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_user_only_upload_request(
+                ctx(),
+                carburetor::serde_json::to_string(&upload_request).unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq!(upload_response.user.len(), 1);
 
     user_only::store_upload_response(upload_cutoff, upload_response).unwrap();
@@ -42,10 +48,16 @@ async fn test_upload_insert_then_download() {
     assert_eq!(stored_users[0].dirty_flag, None);
 
     let download_request = user_only::retrieve_download_request().unwrap();
-    let download_response = backend
-        .process_user_only_download_request(ctx(), download_request)
-        .await
-        .unwrap();
+    let download_response: user_only::DownloadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_user_only_download_request(
+                ctx(),
+                carburetor::serde_json::to_string(&download_request).unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq! {download_response.user.data.len(), 1};
 
     user_only::store_download_response(download_response).unwrap();
@@ -133,19 +145,31 @@ async fn test_upload_update_then_download() {
     let (upload_cutoff, upload_request) = user_only::retrieve_upload_request().unwrap();
     assert_eq!(upload_request.user.len(), 1);
 
-    let upload_response = backend
-        .process_user_only_upload_request(ctx(), upload_request)
-        .await
-        .unwrap();
+    let upload_response: user_only::UploadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_user_only_upload_request(
+                ctx(),
+                carburetor::serde_json::to_string(&upload_request).unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq!(upload_response.user.len(), 1);
 
     user_only::store_upload_response(upload_cutoff, upload_response).unwrap();
 
     let download_request = user_only::retrieve_download_request().unwrap();
-    let download_response = backend
-        .process_user_only_download_request(ctx(), download_request)
-        .await
-        .unwrap();
+    let download_response: user_only::DownloadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_user_only_download_request(
+                ctx(),
+                carburetor::serde_json::to_string(&download_request).unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq! {download_response.user.data.len(), 1};
 
     user_only::store_download_response(download_response).unwrap();

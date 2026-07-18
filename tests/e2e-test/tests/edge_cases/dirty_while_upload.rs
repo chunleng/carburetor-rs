@@ -38,10 +38,16 @@ async fn test_upload_insert_and_update_between_retrieve_and_store() {
     .unwrap();
 
     // Send original upload request to backend (backend processes the insert)
-    let upload_response = backend
-        .process_user_only_upload_request(ctx(), upload_request)
-        .await
-        .unwrap();
+    let upload_response: user_only::UploadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_user_only_upload_request(
+                ctx(),
+                carburetor::serde_json::to_string(&upload_request).unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq!(upload_response.user.len(), 1);
     assert!(upload_response.user[0].is_ok());
 
@@ -138,10 +144,16 @@ async fn test_upload_update_and_update_same_column_between_retrieve_and_store() 
     .unwrap();
 
     // Send first update to backend
-    let upload_response = backend
-        .process_user_only_upload_request(ctx(), upload_request)
-        .await
-        .unwrap();
+    let upload_response: user_only::UploadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_user_only_upload_request(
+                ctx(),
+                carburetor::serde_json::to_string(&upload_request).unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq!(upload_response.user.len(), 1);
     assert!(upload_response.user[0].is_ok());
 

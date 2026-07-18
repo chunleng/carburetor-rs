@@ -12,25 +12,20 @@ pub mod backend_service {
     use carburetor::chrono::{DateTimeUtc, NaiveDate};
 
     use crate::ColumnMeta;
-    use crate::schema::{all_clients, user_only};
 
     #[tarpc::service]
     pub trait TestBackend {
         // Backend functions
-        async fn process_user_only_download_request(
-            request: Option<user_only::DownloadRequest>,
-        ) -> user_only::DownloadResponse;
-        async fn process_user_only_upload_request(
-            request: user_only::UploadRequest,
-        ) -> user_only::UploadResponse;
+        async fn process_user_only_download_request(request_json: String) -> String;
+        async fn process_user_only_upload_request(request_json: String) -> String;
         async fn process_all_clients_download_request(
-            request: Option<all_clients::DownloadRequest>,
+            request_json: String,
             context_user_id: String,
-        ) -> all_clients::DownloadResponse;
+        ) -> String;
         async fn process_all_clients_upload_request(
-            request: all_clients::UploadRequest,
+            request_json: String,
             context_user_id: String,
-        ) -> all_clients::UploadResponse;
+        ) -> String;
 
         // Test helper functions
         async fn test_helper_insert_user(

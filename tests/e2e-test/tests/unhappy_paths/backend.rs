@@ -39,10 +39,16 @@ async fn test_upload_update_record_not_on_backend() {
     let (cutoff, upload_request) = user_only::retrieve_upload_request().unwrap();
     assert_eq!(upload_request.user.len(), 1);
 
-    let upload_response = backend
-        .process_user_only_upload_request(ctx(), upload_request)
-        .await
-        .unwrap();
+    let upload_response: user_only::UploadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_user_only_upload_request(
+                ctx(),
+                carburetor::serde_json::to_string(&upload_request).unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
 
     assert_eq!(upload_response.user.len(), 1);
     match &upload_response.user[0] {
@@ -106,10 +112,16 @@ async fn test_upload_insert_record_already_exists_on_backend() {
     let (cutoff, upload_request) = user_only::retrieve_upload_request().unwrap();
     assert_eq!(upload_request.user.len(), 1);
 
-    let upload_response = backend
-        .process_user_only_upload_request(ctx(), upload_request)
-        .await
-        .unwrap();
+    let upload_response: user_only::UploadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_user_only_upload_request(
+                ctx(),
+                carburetor::serde_json::to_string(&upload_request).unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
 
     assert_eq!(upload_response.user.len(), 1);
     match &upload_response.user[0] {
@@ -150,10 +162,17 @@ async fn test_upload_insert_message_mismatching_context() {
         .unwrap();
 
     let (cutoff, upload_request) = all_clients::retrieve_upload_request().unwrap();
-    let upload_response = backend
-        .process_all_clients_upload_request(ctx(), upload_request, "user-2".to_string())
-        .await
-        .unwrap();
+    let upload_response: all_clients::UploadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_all_clients_upload_request(
+                ctx(),
+                carburetor::serde_json::to_string(&upload_request).unwrap(),
+                "user-2".to_string(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
 
     assert_eq!(upload_response.message.len(), 1);
     match &upload_response.message[0] {
@@ -207,10 +226,17 @@ async fn test_upload_update_message_mismatching_context() {
         .unwrap();
 
     let (cutoff, upload_request) = all_clients::retrieve_upload_request().unwrap();
-    let upload_response = backend
-        .process_all_clients_upload_request(ctx(), upload_request, "user-2".to_string())
-        .await
-        .unwrap();
+    let upload_response: all_clients::UploadResponse = carburetor::serde_json::from_str(
+        &backend
+            .process_all_clients_upload_request(
+                ctx(),
+                carburetor::serde_json::to_string(&upload_request).unwrap(),
+                "user-2".to_string(),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
 
     assert_eq!(upload_response.message.len(), 1);
     match &upload_response.message[0] {
