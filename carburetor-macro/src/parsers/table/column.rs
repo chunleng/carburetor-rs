@@ -42,6 +42,12 @@ impl TryFrom<DieselTableStyleContent> for CarburetorColumn {
             // Handle #[default(...)] — Meta::List with nested name-value or bare path
             if let Meta::List(list) = attr {
                 if list.path.is_ident("default") {
+                    if default_value.is_some() {
+                        return Err(Error::new_spanned(
+                            attr,
+                            "multiple `#[default]` tags are not allowed on a single column",
+                        ));
+                    }
                     let meta = list.parse_args::<Meta>()?;
                     match meta {
                         Meta::NameValue(nv) => {
