@@ -115,6 +115,12 @@ async fn test_clean_migration_of_tables() {
                 column_default: None,
             },
             ColumnMeta {
+                name: "notes".into(),
+                is_primary_key: false,
+                is_nullable: true,
+                column_default: None,
+            },
+            ColumnMeta {
                 name: "recipient_id".into(),
                 is_primary_key: false,
                 is_nullable: false,

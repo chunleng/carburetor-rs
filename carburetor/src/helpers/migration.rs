@@ -51,6 +51,27 @@ pub fn check_table_exists(
 }
 
 #[cfg(for_backend)]
+/// Maps PostgreSQL `information_schema.columns.data_type` values to the
+/// uppercase SQL type strings used by carburetor's `ColumnDef`.
+fn normalize_pg_data_type(data_type: &str) -> &str {
+    match data_type {
+        "text" => "TEXT",
+        "smallint" => "SMALLINT",
+        "integer" => "INTEGER",
+        "bigint" => "BIGINT",
+        "real" => "REAL",
+        "double precision" => "DOUBLE PRECISION",
+        "boolean" => "BOOLEAN",
+        "timestamp without time zone" => "TIMESTAMP",
+        "timestamp with time zone" => "TIMESTAMPTZ",
+        "date" => "DATE",
+        "time without time zone" => "TIME",
+        "jsonb" => "JSONB",
+        _ => data_type,
+    }
+}
+
+#[cfg(for_backend)]
 pub fn alter_table(
     conn: &mut diesel::PgConnection,
     table_name: &str,
@@ -62,14 +83,30 @@ pub fn alter_table(
     struct Row {
         #[diesel(sql_type = diesel::sql_types::Text)]
         column_name: String,
+        #[diesel(sql_type = diesel::sql_types::Text)]
+        data_type: String,
         #[diesel(sql_type = diesel::sql_types::Bool)]
         is_nullable: bool,
+        #[diesel(sql_type = diesel::sql_types::Bool)]
+        is_primary_key: bool,
     }
 
     let existing: Vec<Row> = diesel::sql_query(
-        "SELECT column_name, \
-         CASE WHEN is_nullable = 'YES' THEN true ELSE false END AS is_nullable \
-         FROM information_schema.columns WHERE table_name = $1",
+        "SELECT c.column_name, \
+         c.data_type, \
+         CASE WHEN c.is_nullable = 'YES' THEN true ELSE false END AS is_nullable, \
+         COALESCE(pk.is_primary_key, false) AS is_primary_key \
+         FROM information_schema.columns c \
+         LEFT JOIN ( \
+           SELECT kcu.column_name AS column_name, true AS is_primary_key \
+           FROM information_schema.table_constraints tc \
+           JOIN information_schema.key_column_usage kcu \
+             ON tc.constraint_name = kcu.constraint_name \
+             AND tc.table_schema = kcu.table_schema \
+           WHERE tc.constraint_type = 'PRIMARY KEY' \
+             AND tc.table_name = $1 \
+         ) pk ON c.column_name = pk.column_name \
+         WHERE c.table_name = $1",
     )
     .bind::<diesel::sql_types::Text, _>(table_name)
     .load(conn)
@@ -77,6 +114,35 @@ pub fn alter_table(
         message: format!("Failed to introspect columns of table '{}'", table_name),
         source: e.into(),
     })?;
+
+    for col in declared_columns {
+        if let Some(db_col) = existing.iter().find(|e| e.column_name == col.name) {
+            let db_type = normalize_pg_data_type(&db_col.data_type);
+            if db_type != col.sql_type {
+                return Err(crate::error::Error::Migration(format!(
+                    "Column '{}' on table '{}' has a type mismatch: \
+                     schema declares '{}', but the database has '{}'.",
+                    col.name, table_name, col.sql_type, db_type
+                )));
+            }
+
+            if col.primary_key != db_col.is_primary_key {
+                return Err(crate::error::Error::Migration(format!(
+                    "Column '{}' on table '{}' has a primary key mismatch: \
+                     schema declares {}, but the database has {}.",
+                    col.name, table_name, col.primary_key, db_col.is_primary_key
+                )));
+            }
+
+            if !col.null && db_col.is_nullable {
+                return Err(crate::error::Error::Migration(format!(
+                    "Column '{}' on table '{}' has a nullability mismatch: \
+                     schema declares NOT NULL, but the database allows NULL.",
+                    col.name, table_name
+                )));
+            }
+        }
+    }
 
     let missing: Vec<&ColumnDef> = declared_columns
         .iter()

@@ -155,6 +155,7 @@ impl TestClientDatabase {
                 recipient_id TEXT NOT NULL,
                 subject TEXT NOT NULL,
                 body TEXT NOT NULL,
+                notes TEXT,
                 last_synced_at TIMESTAMPTZ,
                 is_deleted BOOLEAN NOT NULL,
                 dirty_flag TEXT,

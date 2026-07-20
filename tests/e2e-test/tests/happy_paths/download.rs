@@ -20,6 +20,7 @@ async fn insert_dummy_message(
             recipient_id.to_string(),
             "subject".to_string(),
             "body".to_string(),
+            None,
             is_deleted,
         )
         .await

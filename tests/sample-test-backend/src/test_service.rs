@@ -161,6 +161,7 @@ impl TestBackend for TestService {
         recipient_id: String,
         subject: String,
         body: String,
+        notes: Option<String>,
         is_deleted: bool,
     ) {
         let mut conn = get_connection().unwrap();
@@ -172,6 +173,7 @@ impl TestBackend for TestService {
                     recipient_id,
                     subject,
                     body,
+                    notes,
                     is_deleted,
                 },
                 schema::messages::last_synced_at.eq(utc_now),
