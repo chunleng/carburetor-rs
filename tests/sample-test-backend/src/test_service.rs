@@ -228,4 +228,8 @@ impl TestBackend for TestService {
     async fn test_helper_get_database_url(self, _: Context) -> String {
         self.database_url
     }
+
+    async fn test_helper_rerun_migrations(self, _: Context) -> Result<(), String> {
+        schema::run_migrations(&mut get_connection().unwrap()).map_err(|e| e.to_string())
+    }
 }
