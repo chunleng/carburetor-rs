@@ -53,6 +53,11 @@ pub fn check_table_exists(
 #[cfg(for_backend)]
 /// Maps PostgreSQL `information_schema.columns.data_type` values to the
 /// uppercase SQL type strings used by carburetor's `ColumnDef`.
+///
+/// This whitelist must stay in sync with
+/// `DieselPostgresType::get_sql_type_string` in
+/// `carburetor-macro/src/parsers/table/postgres_type.rs`. When a new type is
+/// added there, add the corresponding PG name → SQL string mapping here.
 fn normalize_pg_data_type(data_type: &str) -> &str {
     match data_type {
         "text" => "TEXT",

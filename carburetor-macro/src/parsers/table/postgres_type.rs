@@ -68,6 +68,9 @@ impl DieselPostgresType {
         }
     }
 
+    /// Source of truth for SQL type strings. The backend migration helper
+    /// `normalize_pg_data_type` in `carburetor/src/helpers/migration.rs`
+    /// mirrors these mappings — update both when adding a new type.
     pub(crate) fn get_sql_type_string(&self) -> &'static str {
         match self {
             DieselPostgresType::Text => "TEXT",
