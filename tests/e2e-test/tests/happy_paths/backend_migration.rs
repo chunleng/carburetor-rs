@@ -228,6 +228,29 @@ async fn test_extra_non_null_column_with_default_allowed() {
 }
 
 #[tokio::test]
+async fn test_migration_ignores_shadow_table_in_other_schema() {
+    let backend_server = TestBackendHandle::start();
+    let backend = backend_server.client().await;
+
+    let db_url = backend.test_helper_get_database_url(ctx()).await.unwrap();
+    let mut conn = diesel::PgConnection::establish(&db_url).unwrap();
+
+    // A same-named table in a different schema with a NOT NULL column absent
+    // from the declared schema. Without table_schema filtering in the
+    // introspection query, this column leaks into the extra-column check and
+    // causes a spurious migration failure.
+    diesel::sql_query("CREATE SCHEMA shadow")
+        .execute(&mut conn)
+        .unwrap();
+    diesel::sql_query("CREATE TABLE shadow.users (evil_column TEXT NOT NULL)")
+        .execute(&mut conn)
+        .unwrap();
+
+    let result = backend.test_helper_rerun_migrations(ctx()).await.unwrap();
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
 async fn test_make_existing_column_nullable() {
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;

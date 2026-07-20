@@ -38,7 +38,7 @@ pub fn check_table_exists(
     }
 
     let result: Row = diesel::sql_query(
-        "SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = $1)",
+        "SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = $1 AND table_schema = current_schema())",
     )
     .bind::<diesel::sql_types::Text, _>(table_name)
     .get_result(conn)
@@ -113,8 +113,10 @@ pub fn alter_table(
              AND tc.table_schema = kcu.table_schema \
            WHERE tc.constraint_type = 'PRIMARY KEY' \
              AND tc.table_name = $1 \
+             AND tc.table_schema = current_schema() \
          ) pk ON c.column_name = pk.column_name \
-         WHERE c.table_name = $1",
+         WHERE c.table_name = $1 \
+           AND c.table_schema = current_schema()",
     )
     .bind::<diesel::sql_types::Text, _>(table_name)
     .load(conn)
