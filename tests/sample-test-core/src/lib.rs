@@ -44,6 +44,7 @@ pub mod backend_service {
             recipient_id: String,
             subject: String,
             body: String,
+            notes: Option<String>,
             is_deleted: bool,
         );
         async fn test_helper_get_user_last_synced_at(id: String) -> DateTimeUtc;
@@ -77,6 +78,7 @@ pub mod schema {
                 recipient_id -> Text,
                 subject -> Text,
                 body -> Text,
+                notes -> Nullable<Text>,
             }
         }
         sync_groups {

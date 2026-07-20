@@ -149,6 +149,7 @@ async fn test_upload_insert_message_mismatching_context() {
         recipient_id: "user-1".to_string(),
         subject: "Hello".to_string(),
         body: "World".to_string(),
+        notes: None,
         last_synced_at: None,
         is_deleted: false,
         dirty_flag: Some("insert".to_string()),
@@ -202,6 +203,7 @@ async fn test_upload_update_message_mismatching_context() {
             "user-1".to_string(),
             "subject".to_string(),
             "body".to_string(),
+            None,
             false,
         )
         .await
@@ -213,6 +215,7 @@ async fn test_upload_update_message_mismatching_context() {
         recipient_id: "user-1".to_string(),
         subject: "Updated subject".to_string(),
         body: "Updated body".to_string(),
+        notes: None,
         last_synced_at: None,
         is_deleted: false,
         dirty_flag: Some("update".to_string()),

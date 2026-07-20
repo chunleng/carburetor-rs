@@ -320,6 +320,7 @@ async fn test_upload_update_message_matching_context() {
             "user-1".to_string(),
             "Hello".to_string(),
             "World".to_string(),
+            None,
             false,
         )
         .await
@@ -332,6 +333,7 @@ async fn test_upload_update_message_matching_context() {
         recipient_id: "user-1".to_string(),
         subject: "Updated Subject".to_string(),
         body: "Updated Body".to_string(),
+        notes: None,
         last_synced_at: None,
         is_deleted: false,
         dirty_flag: Some("update".to_string()),
@@ -390,6 +392,7 @@ async fn test_upload_insert_message_matching_context() {
         recipient_id: "user-1".to_string(),
         subject: "Hello".to_string(),
         body: "World".to_string(),
+        notes: None,
         last_synced_at: None,
         is_deleted: false,
         dirty_flag: Some("insert".to_string()),

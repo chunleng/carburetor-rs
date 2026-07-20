@@ -115,6 +115,12 @@ async fn test_clean_migration_of_tables() {
                 column_default: None,
             },
             ColumnMeta {
+                name: "notes".into(),
+                is_primary_key: false,
+                is_nullable: true,
+                column_default: None,
+            },
+            ColumnMeta {
                 name: "recipient_id".into(),
                 is_primary_key: false,
                 is_nullable: false,
@@ -185,6 +191,40 @@ async fn test_add_nullable_column_without_default() {
     assert_eq!(columns.len(), 1);
     assert!(columns[0].is_nullable);
     assert_eq!(columns[0].column_default, None);
+}
+
+#[tokio::test]
+async fn test_extra_nullable_column_allowed() {
+    let backend_server = TestBackendHandle::start();
+    let backend = backend_server.client().await;
+
+    let db_url = backend.test_helper_get_database_url(ctx()).await.unwrap();
+    let mut conn = diesel::PgConnection::establish(&db_url).unwrap();
+
+    diesel::sql_query("ALTER TABLE users ADD COLUMN extra_nullable TEXT")
+        .execute(&mut conn)
+        .unwrap();
+
+    let result = backend.test_helper_rerun_migrations(ctx()).await.unwrap();
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_extra_non_null_column_with_default_allowed() {
+    let backend_server = TestBackendHandle::start();
+    let backend = backend_server.client().await;
+
+    let db_url = backend.test_helper_get_database_url(ctx()).await.unwrap();
+    let mut conn = diesel::PgConnection::establish(&db_url).unwrap();
+
+    diesel::sql_query(
+        "ALTER TABLE users ADD COLUMN extra_with_default TEXT NOT NULL DEFAULT 'hello'",
+    )
+    .execute(&mut conn)
+    .unwrap();
+
+    let result = backend.test_helper_rerun_migrations(ctx()).await.unwrap();
+    assert!(result.is_ok());
 }
 
 #[tokio::test]
