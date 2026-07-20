@@ -24,7 +24,7 @@ impl TestBackendHandle {
         let port = Self::find_available_port();
 
         let backend_binary = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/debug/sample-test-backend");
+            .join("../../target/backend/debug/sample-test-backend");
 
         let mut process = Command::new(&backend_binary)
             .arg(port.to_string())

@@ -38,28 +38,31 @@ Clients work offline using generated per-table functions: `insert_<table>()`,
 ### Test & Check
 
 ```bash
+# CARGO_TARGET_DIR separates backend and client build artifacts so they can
+# build/test in parallel without recompiling each other's feature variants.
+
 # E2E testing
 # Tests share a single SQLite DB guarded by a mutex; tests run in parallel.
 # Build sample-test-backend first: tests spawn the pre-built binary directly
-cargo build -p sample-test-backend && CARBURETOR_TARGET=client cargo test -p e2e-test
+CARGO_TARGET_DIR=target/backend cargo build -p sample-test-backend && CARGO_TARGET_DIR=target/client CARBURETOR_TARGET=client cargo test -p e2e-test
 
 # Backend
-cargo build -p carburetor --features=diesel/postgres
+CARGO_TARGET_DIR=target/backend cargo build -p carburetor --features=diesel/postgres
 
 # Client
-CARBURETOR_TARGET=client cargo build -p carburetor --features=diesel/sqlite --features=migration
+CARGO_TARGET_DIR=target/client CARBURETOR_TARGET=client cargo build -p carburetor --features=diesel/sqlite --features=migration
 ```
 
 ### Other Useful Commands
 
 ```bash
 # Backend
-cargo run --example simple-backend --features backend
-cargo expand --example simple-backend --features backend
+CARGO_TARGET_DIR=target/backend cargo run --example simple-backend --features backend
+CARGO_TARGET_DIR=target/backend cargo expand --example simple-backend --features backend
 
 # Client
-CARBURETOR_TARGET=client cargo run --example simple-client --features client
-CARBURETOR_TARGET=client cargo expand --example simple-client --features client
+CARGO_TARGET_DIR=target/client CARBURETOR_TARGET=client cargo run --example simple-client --features client
+CARGO_TARGET_DIR=target/client CARBURETOR_TARGET=client cargo expand --example simple-client --features client
 ```
 
 ## Common Pitfalls
