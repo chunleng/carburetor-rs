@@ -6,9 +6,10 @@ use tarpc::context::current as ctx;
 
 #[tokio::test]
 async fn test_upload_with_no_dirty_record() {
-    let mut conn = get_clean_test_client_db().get_connection();
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
+    let db = get_clean_test_client_db();
+    let mut conn = db.get_connection();
 
     // Insert a clean (non-dirty) user record
     let clean_user = user_only::InsertableUser {
@@ -59,9 +60,10 @@ async fn test_upload_with_no_dirty_record() {
 
 #[tokio::test]
 async fn test_upload_with_inserted_dirty_record() {
-    let mut conn = get_clean_test_client_db().get_connection();
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
+    let db = get_clean_test_client_db();
+    let mut conn = db.get_connection();
 
     // Insert a user with dirty flag set to "insert"
     let dirty_user = user_only::InsertableUser {
@@ -158,9 +160,10 @@ async fn test_upload_with_inserted_dirty_record() {
 
 #[tokio::test]
 async fn test_upload_with_updated_dirty_record() {
-    let mut conn = get_clean_test_client_db().get_connection();
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
+    let db = get_clean_test_client_db();
+    let mut conn = db.get_connection();
 
     // First, insert the user on the backend
     backend
@@ -305,10 +308,10 @@ async fn test_upload_with_updated_dirty_record() {
 
 #[tokio::test]
 async fn test_upload_update_message_matching_context() {
-    let mut conn = get_clean_test_client_db().get_connection();
-
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
+    let db = get_clean_test_client_db();
+    let mut conn = db.get_connection();
 
     backend
         .test_helper_insert_message(
@@ -377,10 +380,10 @@ async fn test_upload_update_message_matching_context() {
 
 #[tokio::test]
 async fn test_upload_insert_message_matching_context() {
-    let mut conn = get_clean_test_client_db().get_connection();
-
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
+    let db = get_clean_test_client_db();
+    let mut conn = db.get_connection();
 
     let dirty_message = all_clients::InsertableMessage {
         id: "msg-insert-1".to_string(),

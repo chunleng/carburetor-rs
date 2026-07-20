@@ -5,7 +5,8 @@ use sample_test_core::schema::user_only;
 
 #[tokio::test]
 async fn test_insert_user() {
-    let mut conn = get_clean_test_client_db().get_connection();
+    let db = get_clean_test_client_db();
+    let mut conn = db.get_connection();
 
     // Capture time before insert to verify created_at default
     let before = carburetor::helpers::get_utc_now();
@@ -105,7 +106,8 @@ async fn test_insert_user() {
 
 #[tokio::test]
 async fn test_active_users() {
-    let mut conn = get_clean_test_client_db().get_connection();
+    let db = get_clean_test_client_db();
+    let mut conn = db.get_connection();
 
     // Insert two users: one active, one soft-deleted
     let active_user = user_only::InsertableUser {
@@ -158,7 +160,8 @@ async fn test_active_users() {
 
 #[tokio::test]
 async fn test_delete_user() {
-    let mut conn = get_clean_test_client_db().get_connection();
+    let db = get_clean_test_client_db();
+    let mut conn = db.get_connection();
 
     // First, insert a user directly using diesel
     let test_user = user_only::InsertableUser {
@@ -205,7 +208,8 @@ async fn test_delete_user() {
 
 #[tokio::test]
 async fn test_update_user() {
-    let mut conn = get_clean_test_client_db().get_connection();
+    let db = get_clean_test_client_db();
+    let mut conn = db.get_connection();
 
     // First, insert a user directly using diesel
     let test_user = user_only::InsertableUser {

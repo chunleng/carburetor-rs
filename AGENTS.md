@@ -39,9 +39,9 @@ Clients work offline using generated per-table functions: `insert_<table>()`,
 
 ```bash
 # E2E testing
-# Tests share single SQLite DB singleton; --test-threads=1 required
-# Build sample-test-backend first to avoid slow server launch → test failures
-cargo build -p sample-test-backend && CARBURETOR_TARGET=client cargo test -p e2e-test -- --test-threads=1
+# Tests share a single SQLite DB guarded by a mutex; tests run in parallel.
+# Build sample-test-backend first: tests spawn the pre-built binary directly
+cargo build -p sample-test-backend && CARBURETOR_TARGET=client cargo test -p e2e-test
 
 # Backend
 cargo build -p carburetor --features=diesel/postgres
@@ -85,6 +85,20 @@ records.
 - Incoming updates with older timestamps than local data → rejected per-column
 - Locally dirty columns → not overwritten by incoming server data
 - Enables granular LWW at column level, not just row level
+
+### Test DB Mutex Ordering
+
+Tests share a single SQLite DB guarded by a `std::sync::Mutex`. When a test uses
+both the backend and the client DB, **start the backend server before acquiring
+the DB lock**. Otherwise the test holds the lock during container startup,
+serializing other tests that are waiting for the DB:
+
+```rust
+let backend_server = TestBackendHandle::start();
+let backend = backend_server.client().await;
+let db = get_clean_test_client_db();
+let mut conn = db.get_connection();
+```
 
 ### Non-Atomic Group Queries
 

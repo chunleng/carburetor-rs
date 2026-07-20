@@ -6,13 +6,13 @@ use nix::unistd::Pid;
 use std::fs;
 use std::net::TcpListener;
 use std::process::{Child, Command};
-use std::sync::OnceLock;
+use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::time::Duration;
 use tempfile::TempDir;
 
 use sample_test_core::backend_service::TestBackendClient;
 
-static TEST_CLIENT_DB: OnceLock<TestClientDatabase> = OnceLock::new();
+static TEST_CLIENT_DB: OnceLock<Mutex<TestClientDatabase>> = OnceLock::new();
 
 pub struct TestBackendHandle {
     process: Child,
@@ -175,8 +175,14 @@ impl TestClientDatabase {
     }
 }
 
-pub fn get_clean_test_client_db() -> &'static TestClientDatabase {
-    let db = TEST_CLIENT_DB.get_or_init(|| TestClientDatabase::new());
-    db.reset();
-    db
+/// Returns a `MutexGuard` holding exclusive access to the shared client DB.
+/// The caller must hold the guard for the duration of the test so that
+/// parallel tests serialize on DB access while backend startup overlaps.
+/// Poison is recovered from — `reset()` recreates the DB from scratch, so
+/// a panicked previous test does not corrupt the next test's data.
+pub fn get_clean_test_client_db() -> MutexGuard<'static, TestClientDatabase> {
+    let db = TEST_CLIENT_DB.get_or_init(|| Mutex::new(TestClientDatabase::new()));
+    let guard = db.lock().unwrap_or_else(|e| e.into_inner());
+    guard.reset();
+    guard
 }
