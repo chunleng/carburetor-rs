@@ -194,6 +194,40 @@ async fn test_add_nullable_column_without_default() {
 }
 
 #[tokio::test]
+async fn test_extra_nullable_column_allowed() {
+    let backend_server = TestBackendHandle::start();
+    let backend = backend_server.client().await;
+
+    let db_url = backend.test_helper_get_database_url(ctx()).await.unwrap();
+    let mut conn = diesel::PgConnection::establish(&db_url).unwrap();
+
+    diesel::sql_query("ALTER TABLE users ADD COLUMN extra_nullable TEXT")
+        .execute(&mut conn)
+        .unwrap();
+
+    let result = backend.test_helper_rerun_migrations(ctx()).await.unwrap();
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_extra_non_null_column_with_default_allowed() {
+    let backend_server = TestBackendHandle::start();
+    let backend = backend_server.client().await;
+
+    let db_url = backend.test_helper_get_database_url(ctx()).await.unwrap();
+    let mut conn = diesel::PgConnection::establish(&db_url).unwrap();
+
+    diesel::sql_query(
+        "ALTER TABLE users ADD COLUMN extra_with_default TEXT NOT NULL DEFAULT 'hello'",
+    )
+    .execute(&mut conn)
+    .unwrap();
+
+    let result = backend.test_helper_rerun_migrations(ctx()).await.unwrap();
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
 async fn test_make_existing_column_nullable() {
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;

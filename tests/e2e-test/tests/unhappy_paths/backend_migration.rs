@@ -163,3 +163,23 @@ async fn test_nullable_tightening_fails() {
     assert!(err.contains("nullability mismatch"));
     assert!(err.contains("username"));
 }
+
+#[tokio::test]
+async fn test_extra_non_null_column_without_default_fails() {
+    let backend_server = TestBackendHandle::start();
+    let backend = backend_server.client().await;
+
+    let db_url = backend.test_helper_get_database_url(ctx()).await.unwrap();
+    let mut conn = diesel::PgConnection::establish(&db_url).unwrap();
+
+    diesel::sql_query("ALTER TABLE users ADD COLUMN extra_required TEXT NOT NULL")
+        .execute(&mut conn)
+        .unwrap();
+
+    let result = backend.test_helper_rerun_migrations(ctx()).await.unwrap();
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(err.contains("extra_required"));
+    assert!(err.contains("users"));
+    assert!(err.contains("NOT NULL"));
+}
