@@ -188,11 +188,11 @@ async fn test_add_nullable_column_without_default() {
 }
 
 #[tokio::test]
-async fn test_add_missing_column_without_default_fails() {
+async fn test_make_existing_column_nullable() {
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
 
-    diesel::sql_query("ALTER TABLE users DROP COLUMN username")
+    diesel::sql_query("ALTER TABLE users ALTER COLUMN first_name SET NOT NULL")
         .execute(
             &mut diesel::PgConnection::establish(
                 &backend.test_helper_get_database_url(ctx()).await.unwrap(),
@@ -202,6 +202,15 @@ async fn test_add_missing_column_without_default_fails() {
         .unwrap();
 
     let result = backend.test_helper_rerun_migrations(ctx()).await.unwrap();
-    assert!(result.is_err());
-    assert!(result.unwrap_err().contains("no default"));
+    assert!(result.is_ok());
+
+    let columns: Vec<ColumnMeta> = backend
+        .test_helper_get_table_columns(ctx(), "users".to_string())
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|c| c.name == "first_name")
+        .collect();
+    assert_eq!(columns.len(), 1);
+    assert!(columns[0].is_nullable);
 }
