@@ -5,9 +5,10 @@ use tarpc::context::current as ctx;
 
 #[tokio::test]
 async fn test_upload_insert_then_download() {
-    let mut conn = get_clean_test_client_db().get_connection();
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
+    let db = get_clean_test_client_db();
+    let mut conn = db.get_connection();
 
     // Insert a user on client using the generated function
     let inserted_user = user_only::insert_user(user_only::InsertUser {
@@ -79,9 +80,10 @@ async fn test_upload_insert_then_download() {
 
 #[tokio::test]
 async fn test_upload_update_then_download() {
-    let mut conn = get_clean_test_client_db().get_connection();
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
+    let db = get_clean_test_client_db();
+    let mut conn = db.get_connection();
 
     // Insert a user on the backend
     backend

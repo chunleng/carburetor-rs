@@ -6,9 +6,10 @@ use tarpc::context::current as ctx;
 
 #[tokio::test]
 async fn test_upload_update_record_not_on_backend() {
-    let mut conn = get_clean_test_client_db().get_connection();
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
+    let db = get_clean_test_client_db();
+    let mut conn = db.get_connection();
 
     let dirty_at = carburetor::helpers::get_utc_now().to_rfc3339();
 
@@ -64,9 +65,10 @@ async fn test_upload_update_record_not_on_backend() {
 
 #[tokio::test]
 async fn test_upload_insert_record_already_exists_on_backend() {
-    let mut conn = get_clean_test_client_db().get_connection();
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
+    let db = get_clean_test_client_db();
+    let mut conn = db.get_connection();
 
     // Pre-insert the record on the backend
     backend
@@ -137,10 +139,10 @@ async fn test_upload_insert_record_already_exists_on_backend() {
 
 #[tokio::test]
 async fn test_upload_insert_message_mismatching_context() {
-    let mut conn = get_clean_test_client_db().get_connection();
-
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
+    let db = get_clean_test_client_db();
+    let mut conn = db.get_connection();
 
     let dirty_message = all_clients::InsertableMessage {
         id: "msg-reject-1".to_string(),
@@ -188,10 +190,10 @@ async fn test_upload_insert_message_mismatching_context() {
 
 #[tokio::test]
 async fn test_upload_update_message_mismatching_context() {
-    let mut conn = get_clean_test_client_db().get_connection();
-
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
+    let db = get_clean_test_client_db();
+    let mut conn = db.get_connection();
 
     backend
         .test_helper_insert_message(

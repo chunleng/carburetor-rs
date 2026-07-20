@@ -5,9 +5,10 @@ use tarpc::context::current as ctx;
 
 #[tokio::test]
 async fn test_download_between_upload_process_and_store() {
-    let mut conn = get_clean_test_client_db().get_connection();
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
+    let db = get_clean_test_client_db();
+    let mut conn = db.get_connection();
 
     // Seed backend and client with an already-synced user
     backend

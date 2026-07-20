@@ -46,10 +46,10 @@ async fn insert_dummy_user(backend: &TestBackendClient, id: &str, is_deleted: bo
 
 #[tokio::test]
 async fn test_download_from_offset() {
-    let mut conn = get_clean_test_client_db().get_connection();
-
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
+    let db = get_clean_test_client_db();
+    let mut conn = db.get_connection();
 
     insert_dummy_user(&backend, "a", false).await;
 
@@ -95,10 +95,10 @@ async fn test_download_from_offset() {
 
 #[tokio::test]
 async fn test_clean_download() {
-    let mut conn = get_clean_test_client_db().get_connection();
-
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
+    let db = get_clean_test_client_db();
+    let mut conn = db.get_connection();
 
     insert_dummy_user(&backend, "a", false).await;
     insert_dummy_user(&backend, "b", true).await;
@@ -127,10 +127,9 @@ async fn test_clean_download() {
 
 #[tokio::test]
 async fn test_download_only_returns_messages_matching_context() {
-    get_clean_test_client_db();
-
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
+    let _db = get_clean_test_client_db();
 
     insert_dummy_message(&backend, "msg-a", "user-1", false).await;
     insert_dummy_message(&backend, "msg-b", "user-2", false).await;

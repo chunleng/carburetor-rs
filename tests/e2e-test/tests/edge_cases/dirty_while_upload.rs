@@ -5,9 +5,10 @@ use tarpc::context::current as ctx;
 
 #[tokio::test]
 async fn test_upload_insert_and_update_between_retrieve_and_store() {
-    let mut conn = get_clean_test_client_db().get_connection();
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
+    let db = get_clean_test_client_db();
+    let mut conn = db.get_connection();
 
     // Insert a user — dirty_flag="insert"
     let inserted = user_only::insert_user(user_only::InsertUser {
@@ -70,9 +71,10 @@ async fn test_upload_insert_and_update_between_retrieve_and_store() {
 
 #[tokio::test]
 async fn test_upload_update_and_update_same_column_between_retrieve_and_store() {
-    let mut conn = get_clean_test_client_db().get_connection();
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
+    let db = get_clean_test_client_db();
+    let mut conn = db.get_connection();
 
     // Seed backend and client with an already-synced user
     backend
