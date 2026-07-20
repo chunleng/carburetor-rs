@@ -67,10 +67,11 @@ async fn test_upload_insert_omitting_default_columns() {
     // versions and ensure additional records returned by the server are
     // not lost in the older local client by storing them unstructuredly.
     // This test will be useful to capture that behavior.
-    let stored: Vec<UserRow> =
-        sql_query("SELECT id, created_at, nickname, priority, preferences FROM users WHERE id = 'user-old-1'")
-            .load(&mut conn)
-            .unwrap();
+    let stored: Vec<UserRow> = sql_query(
+        "SELECT id, created_at, nickname, priority, preferences FROM users WHERE id = 'user-old-1'",
+    )
+    .load(&mut conn)
+    .unwrap();
 
     assert_eq!(stored.len(), 1);
     // Rust default applied by backend conversion (unwrap_or_else)
