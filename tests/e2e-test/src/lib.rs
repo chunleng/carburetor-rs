@@ -23,8 +23,10 @@ impl TestBackendHandle {
     pub fn start() -> Self {
         let port = Self::find_available_port();
 
-        let mut process = Command::new("cargo")
-            .args(["run", "-p", "sample-test-backend", "--"])
+        let backend_binary = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/debug/sample-test-backend");
+
+        let mut process = Command::new(&backend_binary)
             .arg(port.to_string())
             .env("CARBURETOR_TARGET", "backend")
             .spawn()
