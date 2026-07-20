@@ -9,6 +9,9 @@ pub enum Error {
     )]
     ConfigInit,
 
+    #[error("Migration error: {0}")]
+    Migration(String),
+
     #[error("Unknown error: {message}\n{source}")]
     Unhandled {
         message: String,

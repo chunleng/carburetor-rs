@@ -67,6 +67,8 @@ pub(crate) fn generate_run_migrations(tokens: &mut TokenStream, tables: &[Rc<Car
                 let exists = carburetor::helpers::migration::check_table_exists(conn, #table_name_str)?;
                 if !exists {
                     carburetor::helpers::migration::create_table(conn, #table_name_str, &columns)?;
+                } else {
+                    carburetor::helpers::migration::add_missing_columns(conn, #table_name_str, &columns)?;
                 }
             }
         }

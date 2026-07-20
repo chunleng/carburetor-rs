@@ -49,6 +49,7 @@ pub mod backend_service {
         async fn test_helper_get_user_last_synced_at(id: String) -> DateTimeUtc;
         async fn test_helper_get_table_columns(table_name: String) -> Vec<ColumnMeta>;
         async fn test_helper_get_database_url() -> String;
+        async fn test_helper_rerun_migrations() -> Result<(), String>;
     }
 }
 

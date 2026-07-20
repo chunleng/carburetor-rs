@@ -1,5 +1,5 @@
 use carburetor::{chrono::NaiveDate, config::initialize_carburetor_global_config};
-use diesel::{RunQueryDsl, prelude::*};
+use diesel::prelude::*;
 
 use crate::schema::all_clients;
 
@@ -16,7 +16,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         database_url,
     });
 
-    diesel::sql_query("DROP TABLE IF EXISTS users").execute(&mut connection)?;
     schema::run_migrations(&mut connection)?;
 
     let id = "USER1".to_string();
