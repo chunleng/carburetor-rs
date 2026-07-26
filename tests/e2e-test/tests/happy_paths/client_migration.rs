@@ -92,3 +92,54 @@ async fn test_clean_migration_creates_all_tables() {
     assert_column(&offsets, "table_name", "TEXT", true, true, None);
     assert_column(&offsets, "cutoff_at", "TIMESTAMPTZ", true, false, None);
 }
+
+/// Recreate `users` with only NOT NULL no-default columns, omitting every
+/// addable column (nullable or has a SQL default). After migration the table
+/// should gain all 6 omitted columns with correct attributes.
+#[tokio::test]
+async fn test_existing_table_missing_columns_gets_added() {
+    let db = get_clean_test_client_db();
+    let mut conn = db.get_connection();
+
+    diesel::sql_query("DROP TABLE users")
+        .execute(&mut conn)
+        .unwrap();
+    diesel::sql_query(
+        "CREATE TABLE users (\
+         id TEXT PRIMARY KEY NOT NULL, \
+         username TEXT NOT NULL, \
+         joined_on DATE NOT NULL, \
+         created_at TIMESTAMPTZ NOT NULL, \
+         is_deleted BOOLEAN NOT NULL, \
+         column_sync_metadata JSON NOT NULL)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+
+    let before = get_columns(&mut conn, "users");
+    assert_eq!(before.len(), 6, "table should start with 6 columns");
+
+    sample_test_core::schema::run_migrations(&mut conn).unwrap();
+
+    let after = get_columns(&mut conn, "users");
+    assert_eq!(
+        after.len(),
+        12,
+        "table should have 12 columns after migration"
+    );
+
+    // Verify the added columns have correct attributes
+    assert_column(&after, "first_name", "TEXT", false, false, None);
+    assert_column(&after, "nickname", "TEXT", false, false, None);
+    assert_column(&after, "priority", "INTEGER", true, false, Some("0"));
+    assert_column(
+        &after,
+        "preferences",
+        "TEXT",
+        false,
+        false,
+        Some("'no preference'"),
+    );
+    assert_column(&after, "last_synced_at", "TIMESTAMPTZ", false, false, None);
+    assert_column(&after, "dirty_flag", "TEXT", false, false, None);
+}

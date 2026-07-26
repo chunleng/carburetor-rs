@@ -118,25 +118,15 @@ pub(crate) fn generate_run_migrations(tokens: &mut TokenStream, tables: &[Rc<Car
                 .collect();
             let column_count = column_defs.len();
 
-            let alter_block = if is_client {
-                // TODO: alter_table for client to be added later
-                quote! {}
-            } else {
-                quote! {
-                    else {
-                        carburetor::helpers::migration::alter_table(conn, #table_name_str, &columns)?;
-                    }
-                }
-            };
-
             quote! {
                 {
                     let columns: [carburetor::helpers::migration::ColumnDef; #column_count] = [#(#column_defs),*];
                     let exists = carburetor::helpers::migration::check_table_exists(conn, #table_name_str)?;
                     if !exists {
                         carburetor::helpers::migration::create_table(conn, #table_name_str, &columns)?;
+                    } else {
+                        carburetor::helpers::migration::alter_table(conn, #table_name_str, &columns)?;
                     }
-                    #alter_block
                 }
             }
         })
