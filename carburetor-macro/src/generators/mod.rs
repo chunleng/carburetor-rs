@@ -33,10 +33,10 @@ pub(crate) fn generate_carburetor_sync_config(
             generate_diesel_table_schema(tokens, &x);
             generate_diesel_model(tokens, &x);
         });
-
-        #[cfg(feature = "migration")]
-        generate_run_migrations(tokens, &sync_config.tables);
     }
+
+    #[cfg(feature = "migration")]
+    generate_run_migrations(tokens, &sync_config.tables);
 
     sync_config.sync_groups.iter().for_each(|x| {
         let mut mod_tokens = TokenStream::new();
