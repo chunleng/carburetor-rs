@@ -1,6 +1,6 @@
 use carburetor::config::{CarburetorGlobalConfig, initialize_carburetor_global_config};
 use carburetor::helpers::get_connection;
-use diesel::{RunQueryDsl, SqliteConnection};
+use diesel::SqliteConnection;
 use nix::sys::signal::{Signal, kill};
 use nix::unistd::Pid;
 use std::fs;
@@ -129,50 +129,7 @@ impl TestClientDatabase {
         // (This is safe because the config is already set, and get_connection uses the same path)
         let mut conn = get_connection().unwrap();
 
-        // Recreate tables
-        diesel::sql_query(
-            "CREATE TABLE users(
-                id TEXT PRIMARY KEY,
-                username TEXT NOT NULL,
-                first_name TEXT,
-                joined_on DATE NOT NULL,
-                created_at TIMESTAMPTZ NOT NULL,
-                nickname TEXT,
-                priority INTEGER NOT NULL DEFAULT 0,
-                preferences TEXT DEFAULT 'no preference',
-                last_synced_at TIMESTAMPTZ,
-                is_deleted BOOLEAN NOT NULL,
-                dirty_flag TEXT,
-                column_sync_metadata JSON NOT NULL
-            )",
-        )
-        .execute(&mut conn)
-        .expect("Failed to create users table");
-
-        diesel::sql_query(
-            "CREATE TABLE messages(
-                id TEXT PRIMARY KEY,
-                recipient_id TEXT NOT NULL,
-                subject TEXT NOT NULL,
-                body TEXT NOT NULL,
-                notes TEXT,
-                last_synced_at TIMESTAMPTZ,
-                is_deleted BOOLEAN NOT NULL,
-                dirty_flag TEXT,
-                column_sync_metadata JSON NOT NULL
-            )",
-        )
-        .execute(&mut conn)
-        .expect("Failed to create messages table");
-
-        diesel::sql_query(
-            "CREATE TABLE carburetor_offsets(
-                table_name TEXT PRIMARY KEY,
-                cutoff_at TIMESTAMPTZ NOT NULL
-            )",
-        )
-        .execute(&mut conn)
-        .expect("Failed to create carburetor_offsets table");
+        sample_test_core::schema::run_migrations(&mut conn).expect("Failed to run migrations");
     }
 }
 
