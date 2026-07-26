@@ -66,4 +66,4 @@ path = "examples/simple_client.rs"
 [features]
 default = []
 backend = ["diesel/postgres", "carburetor/migration"]
-client = ["diesel/sqlite", "diesel/returning_clauses_for_sqlite_3_35"]
+client = ["diesel/sqlite", "diesel/returning_clauses_for_sqlite_3_35", "carburetor/migration"]

@@ -91,6 +91,28 @@ impl DieselPostgresType {
         }
     }
 
+    /// DDL type strings for SQLite. Identical to `get_sql_type_string` except
+    /// JSONB maps to JSON (SQLite has no native JSONB type).
+    pub(crate) fn get_sqlite_ddl_type_string(&self) -> &'static str {
+        match self {
+            DieselPostgresType::Text => "TEXT",
+            DieselPostgresType::SmallInt => "SMALLINT",
+            DieselPostgresType::Integer => "INTEGER",
+            DieselPostgresType::BigInt => "BIGINT",
+            DieselPostgresType::Float => "REAL",
+            DieselPostgresType::Double => "DOUBLE PRECISION",
+            DieselPostgresType::Bool => "BOOLEAN",
+            DieselPostgresType::Timestamp => "TIMESTAMP",
+            DieselPostgresType::Timestamptz => "TIMESTAMPTZ",
+            DieselPostgresType::Date => "DATE",
+            DieselPostgresType::Time => "TIME",
+            DieselPostgresType::Jsonb => "JSON",
+            DieselPostgresType::Generic1(base_ty, inner_ty) => match base_ty {
+                DieselPostgresGeneric1Type::Nullable => inner_ty.get_sqlite_ddl_type_string(),
+            },
+        }
+    }
+
     pub(crate) fn get_diesel_sqlite_string(&self) -> String {
         match self {
             DieselPostgresType::Text

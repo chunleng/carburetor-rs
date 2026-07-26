@@ -1,4 +1,3 @@
-#[cfg(for_backend)]
 pub struct ColumnDef {
     pub name: &'static str,
     pub sql_type: &'static str,
@@ -7,7 +6,6 @@ pub struct ColumnDef {
     pub default: Option<String>,
 }
 
-#[cfg(for_backend)]
 impl ColumnDef {
     pub fn to_sql(&self) -> String {
         let mut def = format!("{} {}", self.name, self.sql_type);
@@ -48,6 +46,32 @@ pub fn check_table_exists(
     })?;
 
     Ok(result.exists)
+}
+
+#[cfg(for_client)]
+pub fn check_table_exists(
+    conn: &mut diesel::SqliteConnection,
+    table_name: &str,
+) -> crate::error::Result<bool> {
+    use diesel::RunQueryDsl;
+
+    #[derive(diesel::QueryableByName)]
+    struct Row {
+        #[diesel(sql_type = diesel::sql_types::BigInt)]
+        count: i64,
+    }
+
+    let result: Row = diesel::sql_query(
+        "SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name = ?",
+    )
+    .bind::<diesel::sql_types::Text, _>(table_name)
+    .get_result(conn)
+    .map_err(|e: diesel::result::Error| crate::error::Error::Unhandled {
+        message: format!("Failed to check if table '{}' exists", table_name),
+        source: e.into(),
+    })?;
+
+    Ok(result.count > 0)
 }
 
 #[cfg(for_backend)]
@@ -233,14 +257,11 @@ pub fn alter_table(
     Ok(())
 }
 
-#[cfg(for_backend)]
 pub fn create_table(
-    conn: &mut diesel::PgConnection,
+    conn: &mut impl diesel::connection::SimpleConnection,
     table_name: &str,
     columns: &[ColumnDef],
 ) -> crate::error::Result<()> {
-    use diesel::RunQueryDsl;
-
     let column_defs_str = columns
         .iter()
         .map(|col| col.to_sql())
@@ -249,8 +270,7 @@ pub fn create_table(
 
     let query = format!("CREATE TABLE {} ({})", table_name, column_defs_str);
 
-    diesel::sql_query(&query)
-        .execute(conn)
+    conn.batch_execute(&query)
         .map_err(|e: diesel::result::Error| crate::error::Error::Unhandled {
             message: format!("Failed to create table '{}'", table_name),
             source: e.into(),

@@ -26,26 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     diesel::sql_query("DROP TABLE IF EXISTS users").execute(&mut connection)?;
     diesel::sql_query("DROP TABLE IF EXISTS carburetor_offsets").execute(&mut connection)?;
-    diesel::sql_query(
-        "CREATE TABLE users(
-            id TEXT PRIMARY KEY,
-            username TEXT NOT NULL,
-            first_name TEXT,
-            joined_on DATE NOT NULL,
-            last_synced_at TIMESTAMPTZ,
-            is_deleted BOOLEAN NOT NULL,
-            dirty_flag TEXT,
-            column_sync_metadata JSON NOT NULL
-        )",
-    )
-    .execute(&mut connection)?;
-    diesel::sql_query(
-        "CREATE TABLE carburetor_offsets(
-            table_name TEXT PRIMARY KEY,
-            cutoff_at TIMESTAMPTZ NOT NULL
-        )",
-    )
-    .execute(&mut connection)?;
+    schema::run_migrations(&mut connection)?;
 
     println!("Check download sync offsets (Null for all):");
     dbg!(all_clients::retrieve_download_request()?);
