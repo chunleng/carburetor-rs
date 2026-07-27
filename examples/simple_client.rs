@@ -24,8 +24,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         SqliteConnection::establish(&database_path).expect("Error connecting to database");
     initialize_carburetor_global_config(CarburetorGlobalConfig { database_path });
 
-    diesel::sql_query("DROP TABLE IF EXISTS users").execute(&mut connection)?;
-    diesel::sql_query("DROP TABLE IF EXISTS carburetor_offsets").execute(&mut connection)?;
     schema::run_migrations(&mut connection)?;
 
     println!("Check download sync offsets (Null for all):");
