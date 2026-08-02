@@ -233,21 +233,23 @@ pub mod backend {
     pub(crate) fn drop_not_null(
         conn: &mut diesel::PgConnection,
         table_name: &str,
-        col_name: &str,
+        columns_to_drop: &[&ColumnDef],
     ) -> crate::error::Result<()> {
-        let query = format!(
-            "ALTER TABLE {} ALTER COLUMN {} DROP NOT NULL",
-            table_name, col_name
-        );
-        diesel::sql_query(&query)
-            .execute(conn)
-            .map_err(|e: diesel::result::Error| crate::error::Error::Unhandled {
-                message: format!(
-                    "Failed to make column '{}' nullable on table '{}'",
-                    col_name, table_name
-                ),
-                source: e.into(),
-            })?;
+        for col in columns_to_drop {
+            let query = format!(
+                "ALTER TABLE {} ALTER COLUMN {} DROP NOT NULL",
+                table_name, col.name
+            );
+            diesel::sql_query(&query)
+                .execute(conn)
+                .map_err(|e: diesel::result::Error| crate::error::Error::Unhandled {
+                    message: format!(
+                        "Failed to make column '{}' nullable on table '{}'",
+                        col.name, table_name
+                    ),
+                    source: e.into(),
+                })?;
+        }
         Ok(())
     }
 }
@@ -417,12 +419,109 @@ pub mod client {
         Ok(())
     }
 
+    /// Builds a column definition string from an existing column, optionally
+    /// relaxing its NOT NULL constraint.
+    fn existing_column_to_sql(col: &ExistingColumn, relax_not_null: bool) -> String {
+        let mut def = format!("{} {}", col.name, col.sql_type);
+        if col.is_primary_key {
+            def.push_str(" PRIMARY KEY");
+        }
+        if !col.is_nullable && !relax_not_null {
+            def.push_str(" NOT NULL");
+        }
+        if let Some(ref default) = col.column_default {
+            def.push_str(&format!(" DEFAULT {}", default));
+        }
+        def
+    }
+
+    /// Rebuilds a table to relax NOT NULL constraints on the specified columns.
+    ///
+    /// SQLite cannot ALTER COLUMN to drop NOT NULL in place, so the table is
+    /// rebuilt: a temp table is created from the existing columns (with NOT NULL
+    /// relaxed on the specified columns), all data is copied, then the old table
+    /// is dropped and the temp renamed to the original name. Columns not in the
+    /// declared schema are preserved.
     pub(crate) fn drop_not_null(
-        _conn: &mut diesel::SqliteConnection,
-        _table_name: &str,
-        _col_name: &str,
+        conn: &mut diesel::SqliteConnection,
+        table_name: &str,
+        columns_to_drop: &[&ColumnDef],
     ) -> crate::error::Result<()> {
-        // TODO: implement DROP NOT NULL via SQLite table-rebuild
+        let existing = introspect_columns(conn, table_name)?;
+        let tmp_table = "_carburetor_tmp";
+
+        let column_defs_str = existing
+            .iter()
+            .map(|col| {
+                let relax = columns_to_drop.iter().any(|c| c.name == col.name);
+                existing_column_to_sql(col, relax)
+            })
+            .collect::<Vec<String>>()
+            .join(", ");
+
+        // A failed prior rebuild may have left a stale temp table behind.
+        diesel::sql_query(format!("DROP TABLE IF EXISTS {}", tmp_table))
+            .execute(conn)
+            .map_err(|e: diesel::result::Error| crate::error::Error::Unhandled {
+                message: format!(
+                    "Failed to drop stale temp table for rebuilding '{}'",
+                    table_name
+                ),
+                source: e.into(),
+            })?;
+
+        diesel::sql_query(format!("CREATE TABLE {} ({})", tmp_table, column_defs_str))
+            .execute(conn)
+            .map_err(|e: diesel::result::Error| crate::error::Error::Unhandled {
+                message: format!(
+                    "Failed to create temp table for rebuilding '{}'",
+                    table_name
+                ),
+                source: e.into(),
+            })?;
+
+        let col_list = existing
+            .iter()
+            .map(|c| c.name.as_str())
+            .collect::<Vec<&str>>()
+            .join(", ");
+
+        diesel::sql_query(format!(
+            "INSERT INTO {} ({}) SELECT {} FROM {}",
+            tmp_table, col_list, col_list, table_name
+        ))
+        .execute(conn)
+        .map_err(|e: diesel::result::Error| crate::error::Error::Unhandled {
+            message: format!(
+                "Failed to copy data during table rebuild for '{}'",
+                table_name
+            ),
+            source: e.into(),
+        })?;
+
+        diesel::sql_query(format!("DROP TABLE {}", table_name))
+            .execute(conn)
+            .map_err(|e: diesel::result::Error| crate::error::Error::Unhandled {
+                message: format!(
+                    "Failed to drop old table during rebuild of '{}'",
+                    table_name
+                ),
+                source: e.into(),
+            })?;
+
+        diesel::sql_query(format!(
+            "ALTER TABLE {} RENAME TO {}",
+            tmp_table, table_name
+        ))
+        .execute(conn)
+        .map_err(|e: diesel::result::Error| crate::error::Error::Unhandled {
+            message: format!(
+                "Failed to rename temp table during rebuild of '{}'",
+                table_name
+            ),
+            source: e.into(),
+        })?;
+
         Ok(())
     }
 }
@@ -493,8 +592,8 @@ pub fn alter_table(
         })
         .collect();
 
-    for col in &needs_drop_not_null {
-        drop_not_null(conn, table_name, col.name)?;
+    if !needs_drop_not_null.is_empty() {
+        drop_not_null(conn, table_name, &needs_drop_not_null)?;
     }
 
     Ok(())

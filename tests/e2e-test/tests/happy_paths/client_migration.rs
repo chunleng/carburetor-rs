@@ -143,3 +143,76 @@ async fn test_existing_table_missing_columns_gets_added() {
     assert_column(&after, "last_synced_at", "TIMESTAMPTZ", false, false, None);
     assert_column(&after, "dirty_flag", "TEXT", false, false, None);
 }
+
+#[derive(Debug, QueryableByName)]
+struct UserRow {
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    username: String,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    first_name: String,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
+    nickname: Option<String>,
+    #[diesel(sql_type = diesel::sql_types::Integer)]
+    priority: i32,
+}
+
+/// Create `users` with `first_name` and `nickname` as NOT NULL (both declared
+/// nullable in the schema). Migration should rebuild the table once, relaxing
+/// both columns to nullable, and preserve all existing row data.
+#[tokio::test]
+async fn test_multiple_columns_relaxed_in_single_rebuild() {
+    let db = get_clean_test_client_db();
+    let mut conn = db.get_connection();
+
+    diesel::sql_query("DROP TABLE users")
+        .execute(&mut conn)
+        .unwrap();
+    diesel::sql_query(
+        "CREATE TABLE users (\
+         id TEXT PRIMARY KEY NOT NULL, \
+         username TEXT NOT NULL, \
+         first_name TEXT NOT NULL, \
+         joined_on DATE NOT NULL, \
+         created_at TIMESTAMPTZ NOT NULL, \
+         nickname TEXT NOT NULL, \
+         priority INTEGER NOT NULL DEFAULT 0, \
+         preferences TEXT DEFAULT 'no preference', \
+         last_synced_at TIMESTAMPTZ, \
+         is_deleted BOOLEAN NOT NULL, \
+         dirty_flag TEXT, \
+         column_sync_metadata JSON NOT NULL)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+
+    diesel::sql_query(
+        "INSERT INTO users \
+         (id, username, first_name, joined_on, created_at, nickname, priority, is_deleted, column_sync_metadata) \
+         VALUES ('user-1', 'alice', 'Alice', '2024-01-15', '2024-01-15T10:00:00Z', 'Alice A', 5, 0, '{}')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+
+    let before = get_columns(&mut conn, "users");
+    assert_column(&before, "first_name", "TEXT", true, false, None);
+    assert_column(&before, "nickname", "TEXT", true, false, None);
+
+    sample_test_core::schema::run_migrations(&mut conn).unwrap();
+
+    let after = get_columns(&mut conn, "users");
+    assert_eq!(after.len(), 12, "table should still have 12 columns");
+    assert_column(&after, "id", "TEXT", true, true, None);
+    assert_column(&after, "first_name", "TEXT", false, false, None);
+    assert_column(&after, "nickname", "TEXT", false, false, None);
+
+    let rows: Vec<UserRow> = diesel::sql_query(
+        "SELECT username, first_name, nickname, priority FROM users WHERE id = 'user-1'",
+    )
+    .load(&mut conn)
+    .unwrap();
+    assert_eq!(rows.len(), 1, "row should be preserved through rebuild");
+    assert_eq!(rows[0].username, "alice");
+    assert_eq!(rows[0].first_name, "Alice");
+    assert_eq!(rows[0].nickname.as_deref(), Some("Alice A"));
+    assert_eq!(rows[0].priority, 5);
+}
