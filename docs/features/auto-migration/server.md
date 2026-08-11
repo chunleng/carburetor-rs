@@ -95,7 +95,7 @@ server:
 - `#[id]` column: `TEXT PRIMARY KEY`
 - `#[last_synced_at]` column: `TIMESTAMPTZ NOT NULL DEFAULT now()`
 - `#[is_deleted]` column: `BOOLEAN`
-- `#[column_sync_metadata]` column: `JSONB`
+- `#[client_column_sync_metadata]` column: `JSONB`
 - `#[backend_only]` columns: Created on the server using PostgreSQL-specific
   types when appropriate
 - `#[client_only]` columns: **Not created** on server-side migrations

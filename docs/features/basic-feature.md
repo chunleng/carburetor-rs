@@ -41,7 +41,7 @@ tables {
         note -> Nullable<Text>,
         #[is_deleted]
         record_deleted -> Boolean,
-        #[column_sync_metadata]
+        #[client_column_sync_metadata]
         sync_metadata -> Jsonb,
         #[last_synced_at]
         updated_at -> Timestamptz
