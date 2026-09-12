@@ -24,7 +24,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         SqliteConnection::establish(&database_path).expect("Error connecting to database");
     initialize_carburetor_global_config(CarburetorGlobalConfig { database_path });
 
-    schema::run_migrations(&mut connection)?;
+    match schema::run_migrations(&mut connection) {
+        Ok(()) => {}
+        Err(carburetor::error::Error::DatabaseWiped { source }) => {
+            // The local database was unrecoverably out of sync with the declared
+            // schema, so it was wiped and recreated. Inform the user that local
+            // data was reset; the next download re-syncs everything from the
+            // backend automatically.
+            eprintln!("Local database was reset: {source}");
+        }
+        Err(e) => return Err(e.into()),
+    }
 
     println!("Check download sync offsets (Null for all):");
     dbg!(all_clients::retrieve_download_request()?);

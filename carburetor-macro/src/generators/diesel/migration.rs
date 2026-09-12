@@ -162,20 +162,52 @@ pub(crate) fn generate_run_migrations(tokens: &mut TokenStream, tables: &[Rc<Car
         );
     }
 
-    tokens.extend(quote! {
-        pub fn run_migrations(conn: &mut #conn_type) -> Result<(), carburetor::error::Error> {
-            use diesel::Connection;
-            conn.transaction(|conn| {
-                #(#table_migrations)*
-                Ok(())
-            }).map_err(|e|
-                carburetor::error::Error::Unhandled {
-                    message: "Migration error".to_string(),
-                    source: e,
+    if is_client {
+        tokens.extend(quote! {
+            pub fn run_migrations(conn: &mut #conn_type) -> Result<(), carburetor::error::Error> {
+                fn migrate_tables(conn: &mut #conn_type) -> Result<(), carburetor::error::Error> {
+                    use diesel::Connection;
+                    conn.transaction(|conn| {
+                        #(#table_migrations)*
+                        Ok(())
+                    })
                 }
-            )
-        }
-    });
+
+                match migrate_tables(conn) {
+                    Ok(()) => Ok(()),
+                    Err(e @ carburetor::error::Error::Migration(_)) => {
+                        // Unrecoverable schema drift: wipe the whole local DB (all user tables) and
+                        // recreate the schema from scratch.
+                        carburetor::helpers::migration::reset_to_clean_state(conn)?;
+                        // Reset-loop guard: a failure on the fresh DB propagates via `?` without
+                        // re-entering the reset branch. No e2e test covers this: the reset drops
+                        // every entity (tables, views, indexes) that can block a fresh CREATE
+                        // TABLE, so a fresh-run failure cannot be forced deterministically.
+                        migrate_tables(conn)?;
+                        Err(carburetor::error::Error::DatabaseWiped {
+                            source: Box::new(e),
+                        })
+                    }
+                    Err(e) => Err(e),
+                }
+            }
+        });
+    } else {
+        tokens.extend(quote! {
+            pub fn run_migrations(conn: &mut #conn_type) -> Result<(), carburetor::error::Error> {
+                use diesel::Connection;
+                conn.transaction(|conn| {
+                    #(#table_migrations)*
+                    Ok(())
+                }).map_err(|e|
+                    carburetor::error::Error::Unhandled {
+                        message: "Migration error".to_string(),
+                        source: e,
+                    }
+                )
+            }
+        });
+    }
 }
 
 #[cfg(all(test, feature = "migration"))]

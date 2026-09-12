@@ -68,7 +68,17 @@ use diesel::prelude::*;
 let mut connection =
     SqliteConnection::establish(&database_path).expect("Error connecting to database");
 
-schema::run_migrations(&mut connection)?;
+match schema::run_migrations(&mut connection) {
+    Ok(()) => {}
+    Err(Error::DatabaseWiped { source }) => {
+        // The local database was unrecoverably out of sync with the declared
+        // schema, so it was wiped and recreated. Inform the user that local
+        // data was reset; the next download re-syncs everything from the
+        // backend automatically.
+        eprintln!("Local database was reset: {source}");
+    }
+    Err(err) => return Err(err),
+}
 ```
 
 On the first run, `run_migrations` creates every declared table (including the
@@ -76,6 +86,12 @@ client-only sync columns and the `carburetor_offsets` table used for incremental
 sync). On later runs, it introspects the existing schema and reconciles it:
 missing columns are added, and type, primary key, and nullability mismatches are
 validated before any change is applied.
+
+If a validation finds a mismatch that cannot be repaired in place,
+`run_migrations` returns `Error::DatabaseWiped`: inform the user that local
+data was reset. The next download re-syncs everything from the backend
+automatically. See [why client migration resets the database to a clean
+state](../explanation/client-migration-reset-to-clean-state.md) for details.
 
 ## Next steps
 
