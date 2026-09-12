@@ -22,8 +22,109 @@ fn get_columns(conn: &mut diesel::SqliteConnection, table: &str) -> Vec<PragmaCo
         .unwrap()
 }
 
+fn assert_column(
+    columns: &[PragmaColumnInfo],
+    name: &str,
+    col_type: &str,
+    notnull: bool,
+    pk: bool,
+    default: Option<&str>,
+) {
+    let col = columns.iter().find(|c| c.name == name).unwrap();
+    assert_eq!(col.col_type, col_type, "column {} type", name);
+    assert_eq!(col.notnull, notnull as i32, "column {} notnull", name);
+    assert_eq!(col.pk, pk as i32, "column {} pk", name);
+    assert_eq!(
+        col.dflt_value.as_deref(),
+        default,
+        "column {} default",
+        name
+    );
+}
+
+/// After a failed migration the client resets to a clean state: managed tables
+/// are dropped and recreated from the declared schema.
+fn assert_declared_users_schema(conn: &mut diesel::SqliteConnection) {
+    let users = get_columns(conn, "users");
+    assert_eq!(users.len(), 12, "users should be recreated with 12 columns");
+    assert_column(&users, "id", "TEXT", true, true, None);
+    assert_column(&users, "username", "TEXT", true, false, None);
+    assert_column(&users, "first_name", "TEXT", false, false, None);
+    assert_column(&users, "joined_on", "DATE", true, false, None);
+    assert_column(&users, "created_at", "TIMESTAMPTZ", true, false, None);
+    assert_column(&users, "nickname", "TEXT", false, false, None);
+    assert_column(&users, "priority", "INTEGER", true, false, Some("0"));
+    assert_column(
+        &users,
+        "preferences",
+        "TEXT",
+        false,
+        false,
+        Some("'no preference'"),
+    );
+    assert_column(&users, "last_synced_at", "TIMESTAMPTZ", false, false, None);
+    assert_column(&users, "is_deleted", "BOOLEAN", true, false, None);
+    assert_column(&users, "dirty_flag", "TEXT", false, false, None);
+    assert_column(&users, "column_sync_metadata", "JSON", true, false, None);
+}
+
+fn assert_declared_messages_schema(conn: &mut diesel::SqliteConnection) {
+    let messages = get_columns(conn, "messages");
+    assert_eq!(
+        messages.len(),
+        9,
+        "messages should be recreated with 9 columns"
+    );
+    assert_column(&messages, "id", "TEXT", true, true, None);
+    assert_column(&messages, "recipient_id", "TEXT", true, false, None);
+    assert_column(&messages, "subject", "TEXT", true, false, None);
+    assert_column(&messages, "body", "TEXT", true, false, None);
+    assert_column(&messages, "notes", "TEXT", false, false, None);
+    assert_column(
+        &messages,
+        "last_synced_at",
+        "TIMESTAMPTZ",
+        false,
+        false,
+        None,
+    );
+    assert_column(&messages, "is_deleted", "BOOLEAN", true, false, None);
+    assert_column(&messages, "dirty_flag", "TEXT", false, false, None);
+    assert_column(&messages, "column_sync_metadata", "JSON", true, false, None);
+}
+
+/// A failed migration that triggered the clean-state reset must surface
+/// `Error::DatabaseWiped` so callers can detect that local data was lost,
+/// with the original migration error preserved as the source.
+fn assert_wiped_migration_error(
+    result: Result<(), carburetor::error::Error>,
+    expected_in_source: &[&str],
+) {
+    let err = result.unwrap_err();
+    assert!(
+        err.to_string().contains("database was wiped"),
+        "error should signal the database was wiped: {}",
+        err
+    );
+    match err {
+        carburetor::error::Error::DatabaseWiped { source } => {
+            let source_msg = source.to_string();
+            for expected in expected_in_source {
+                assert!(
+                    source_msg.contains(expected),
+                    "source error should mention '{}': {}",
+                    expected,
+                    source_msg
+                );
+            }
+        }
+        other => panic!("expected Error::DatabaseWiped, got: {:?}", other),
+    }
+}
+
 /// Omit `username` (NOT NULL, no default) from the existing table. Migration
-/// must error naming the column and table, and must not add any columns.
+/// must error naming the column and table, then reset the DB to a clean
+/// state: `users` is recreated from the declared schema.
 #[tokio::test]
 async fn test_existing_table_missing_non_nullable_without_default_errors() {
     let db = get_clean_test_client_db();
@@ -44,32 +145,14 @@ async fn test_existing_table_missing_non_nullable_without_default_errors() {
     .unwrap();
 
     let result = sample_test_core::schema::run_migrations(&mut conn);
-    assert!(result.is_err(), "migration should fail");
+    assert_wiped_migration_error(result, &["username", "users", "no default specified"]);
 
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("username"),
-        "error should mention column 'username': {}",
-        err_msg
-    );
-    assert!(
-        err_msg.contains("users"),
-        "error should mention table 'users': {}",
-        err_msg
-    );
-
-    // No columns should have been added — validation runs before any DDL
-    let after = get_columns(&mut conn, "users");
-    assert_eq!(
-        after.len(),
-        5,
-        "no columns should be added when migration fails"
-    );
+    assert_declared_users_schema(&mut conn);
 }
 
 /// Create the `users` table with `username` declared as INTEGER instead of
 /// TEXT. SQLite affinity differs (INTEGER vs TEXT), so migration must fail
-/// naming the column, table, and types. No DDL should be applied.
+/// naming the column, table, and types, then reset the DB to a clean state.
 #[tokio::test]
 async fn test_type_mismatch_affinity_fails() {
     let db = get_clean_test_client_db();
@@ -91,47 +174,17 @@ async fn test_type_mismatch_affinity_fails() {
     .unwrap();
 
     let result = sample_test_core::schema::run_migrations(&mut conn);
-    assert!(result.is_err(), "migration should fail");
-
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("type mismatch"),
-        "error should mention type mismatch: {}",
-        err_msg
-    );
-    assert!(
-        err_msg.contains("username"),
-        "error should mention column 'username': {}",
-        err_msg
-    );
-    assert!(
-        err_msg.contains("users"),
-        "error should mention table 'users': {}",
-        err_msg
-    );
-    assert!(
-        err_msg.contains("TEXT"),
-        "error should show declared type/affinity: {}",
-        err_msg
-    );
-    assert!(
-        err_msg.contains("INTEGER"),
-        "error should show DB type/affinity: {}",
-        err_msg
+    assert_wiped_migration_error(
+        result,
+        &["type mismatch", "username", "users", "TEXT", "INTEGER"],
     );
 
-    // No columns should have been added — validation runs before any DDL
-    let after = get_columns(&mut conn, "users");
-    assert_eq!(
-        after.len(),
-        6,
-        "no columns should be added when migration fails"
-    );
+    assert_declared_users_schema(&mut conn);
 }
 
 /// Create the `users` table with an extra NOT NULL column (`extra_required`)
 /// that has no default and is not in the schema. Migration must fail naming
-/// the column and table. No DDL should be applied.
+/// the column and table, then reset the DB to a clean state.
 #[tokio::test]
 async fn test_extra_not_null_column_without_default_fails() {
     let db = get_clean_test_client_db();
@@ -154,38 +207,15 @@ async fn test_extra_not_null_column_without_default_fails() {
     .unwrap();
 
     let result = sample_test_core::schema::run_migrations(&mut conn);
-    assert!(result.is_err(), "migration should fail");
+    assert_wiped_migration_error(result, &["extra_required", "users", "NOT NULL"]);
 
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("extra_required"),
-        "error should mention column 'extra_required': {}",
-        err_msg
-    );
-    assert!(
-        err_msg.contains("users"),
-        "error should mention table 'users': {}",
-        err_msg
-    );
-    assert!(
-        err_msg.contains("NOT NULL"),
-        "error should mention NOT NULL: {}",
-        err_msg
-    );
-
-    // No columns should have been added — validation runs before any DDL
-    let after = get_columns(&mut conn, "users");
-    assert_eq!(
-        after.len(),
-        7,
-        "no columns should be added when migration fails"
-    );
+    assert_declared_users_schema(&mut conn);
 }
 
 /// Users is missing `first_name` (nullable, re-addable). Messages has `subject`
 /// as INTEGER instead of TEXT (affinity mismatch). Users migration succeeds
-/// (first_name re-added), then messages fails. The whole transaction rolls
-/// back, so first_name must still be missing from users.
+/// (first_name re-added), then messages fails. The failure triggers a
+/// clean-state reset, so both tables are recreated from the declared schema.
 #[tokio::test]
 async fn test_partial_migration_rolls_back_all_changes() {
     let db = get_clean_test_client_db();
@@ -232,41 +262,17 @@ async fn test_partial_migration_rolls_back_all_changes() {
     .unwrap();
 
     let result = sample_test_core::schema::run_migrations(&mut conn);
-    assert!(result.is_err(), "migration should fail");
+    assert_wiped_migration_error(result, &["type mismatch", "subject", "messages"]);
 
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("type mismatch"),
-        "error should mention type mismatch: {}",
-        err_msg
-    );
-    assert!(
-        err_msg.contains("subject"),
-        "error should mention column 'subject': {}",
-        err_msg
-    );
-
-    // first_name was re-added by the users migration, but the messages
-    // migration failure rolled back the entire transaction; first_name must
-    // still be gone
-    let users_after = get_columns(&mut conn, "users");
-    assert!(
-        !users_after.iter().any(|c| c.name == "first_name"),
-        "first_name should still be missing after rollback"
-    );
-    assert_eq!(
-        users_after.len(),
-        11,
-        "users should still have 11 columns after rollback"
-    );
+    assert_declared_users_schema(&mut conn);
+    assert_declared_messages_schema(&mut conn);
 }
 
 /// Messages is missing `notes` (nullable, re-addable). Users has `priority` as
 /// TEXT instead of INTEGER (affinity mismatch). For the client, users always
 /// migrates before messages, so users fails first and messages never runs.
-/// Notes was never re-added, so this assertion is trivially true. However,
-/// together with the test above, this guarantees that regardless of migration
-/// order, at least one test exercises actual rollback.
+/// The failure triggers a clean-state reset, so both tables are recreated
+/// from the declared schema regardless of which table failed.
 #[tokio::test]
 async fn test_partial_migration_rolls_back_all_changes_reversed() {
     let db = get_clean_test_client_db();
@@ -313,37 +319,15 @@ async fn test_partial_migration_rolls_back_all_changes_reversed() {
     .unwrap();
 
     let result = sample_test_core::schema::run_migrations(&mut conn);
-    assert!(result.is_err(), "migration should fail");
+    assert_wiped_migration_error(result, &["type mismatch", "priority", "users"]);
 
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("type mismatch"),
-        "error should mention type mismatch: {}",
-        err_msg
-    );
-    assert!(
-        err_msg.contains("priority"),
-        "error should mention column 'priority': {}",
-        err_msg
-    );
-
-    // notes was never re-added (users fails before messages runs), so it must
-    // still be missing
-    let messages_after = get_columns(&mut conn, "messages");
-    assert!(
-        !messages_after.iter().any(|c| c.name == "notes"),
-        "notes should still be missing after failed migration"
-    );
-    assert_eq!(
-        messages_after.len(),
-        8,
-        "messages should still have 8 columns after failed migration"
-    );
+    assert_declared_users_schema(&mut conn);
+    assert_declared_messages_schema(&mut conn);
 }
 
 /// Create users with `id` as a non-PK column (all other columns correct).
-/// Migration must fail with "primary key mismatch" mentioning "id". No DDL
-/// should be applied.
+/// Migration must fail with "primary key mismatch" mentioning "id", then
+/// reset the DB to a clean state.
 #[tokio::test]
 async fn test_primary_key_mismatch_fails() {
     let db = get_clean_test_client_db();
@@ -371,37 +355,14 @@ async fn test_primary_key_mismatch_fails() {
     .unwrap();
 
     let result = sample_test_core::schema::run_migrations(&mut conn);
-    assert!(result.is_err(), "migration should fail");
+    assert_wiped_migration_error(result, &["primary key mismatch", "id", "users"]);
 
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("primary key mismatch"),
-        "error should mention primary key mismatch: {}",
-        err_msg
-    );
-    assert!(
-        err_msg.contains("id"),
-        "error should mention column 'id': {}",
-        err_msg
-    );
-
-    // No DDL should have been applied — id should still not be a PK
-    let after = get_columns(&mut conn, "users");
-    let id_col = after.iter().find(|c| c.name == "id").unwrap();
-    assert_eq!(
-        id_col.pk, 0,
-        "id should still not be a primary key after failed migration"
-    );
-    assert_eq!(
-        after.len(),
-        12,
-        "no columns should be added or removed when migration fails"
-    );
+    assert_declared_users_schema(&mut conn);
 }
 
 /// Create users with `username` as nullable (schema declares NOT NULL).
-/// Migration must fail with "nullability mismatch" mentioning "username".
-/// No DDL should be applied.
+/// Migration must fail with "nullability mismatch" mentioning "username",
+/// then reset the DB to a clean state.
 #[tokio::test]
 async fn test_nullable_tightening_fails() {
     let db = get_clean_test_client_db();
@@ -429,30 +390,164 @@ async fn test_nullable_tightening_fails() {
     .unwrap();
 
     let result = sample_test_core::schema::run_migrations(&mut conn);
-    assert!(result.is_err(), "migration should fail");
+    assert_wiped_migration_error(result, &["nullability mismatch", "username", "users"]);
 
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("nullability mismatch"),
-        "error should mention nullability mismatch: {}",
-        err_msg
-    );
-    assert!(
-        err_msg.contains("username"),
-        "error should mention column 'username': {}",
-        err_msg
-    );
+    assert_declared_users_schema(&mut conn);
+}
 
-    // No DDL should have been applied — username should still be nullable
-    let after = get_columns(&mut conn, "users");
-    let username_col = after.iter().find(|c| c.name == "username").unwrap();
-    assert_eq!(
-        username_col.notnull, 0,
-        "username should still be nullable after failed migration"
+/// A raw SQLite error (e.g. database locked) must NOT trigger the clean-state reset: only schema
+/// (migration) errors wipe the DB. Hold a write lock from a second connection so the migration's
+/// CREATE TABLE fails with SQLITE_BUSY (diesel sets no busy timeout, so it fails immediately), then
+/// assert the error surfaces as Error::Database and the schema is untouched.
+#[tokio::test]
+async fn test_database_error_does_not_trigger_reset() {
+    let db = get_clean_test_client_db();
+    let mut conn = db.get_connection();
+
+    // Force a write during migration: users is missing and must be created.
+    diesel::sql_query("DROP TABLE users")
+        .execute(&mut conn)
+        .unwrap();
+
+    // Data whose survival proves no wipe happened.
+    diesel::sql_query(
+        "INSERT INTO messages \
+         (id, recipient_id, subject, body, is_deleted, column_sync_metadata) \
+         VALUES ('msg-1', 'user-1', 'hi', 'hello', 0, '{}')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+
+    let mut locker = carburetor::helpers::get_connection().unwrap();
+    diesel::sql_query("BEGIN IMMEDIATE")
+        .execute(&mut locker)
+        .unwrap();
+
+    let result = sample_test_core::schema::run_migrations(&mut conn);
+
+    // Release the lock before asserting: the DB is shared across tests.
+    diesel::sql_query("ROLLBACK").execute(&mut locker).unwrap();
+    drop(locker);
+
+    match result {
+        // Database errors surface as Error::Unhandled (with context), never as
+        // Error::DatabaseWiped: only schema (migration) errors trigger the reset.
+        Err(carburetor::error::Error::Unhandled { .. }) => {}
+        other => panic!(
+            "expected non-wiped error (Unhandled), got: {:?}",
+            other.map_err(|e| e.to_string())
+        ),
+    }
+
+    // No reset happened: users is still missing, messages data intact.
+    assert!(
+        get_columns(&mut conn, "users").is_empty(),
+        "users should still be missing (no reset)"
     );
+    let messages: i64 = diesel::select(diesel::dsl::sql::<diesel::sql_types::BigInt>(
+        "COUNT(*) FROM messages",
+    ))
+    .get_result(&mut conn)
+    .unwrap();
+    assert_eq!(messages, 1, "messages data should survive (no wipe)");
+}
+
+/// A view occupying a table's namespace blocks the fresh run's CREATE TABLE
+/// for that name. Drift `users` so the reset runs; the reset drops the view
+/// named `messages`, the fresh run recreates `messages` as a table, and the
+/// result is `Error::DatabaseWiped` with the original drift as the source.
+#[tokio::test]
+async fn test_reset_drops_blocking_views() {
+    let db = get_clean_test_client_db();
+    let mut conn = db.get_connection();
+
+    // Drift users: username as INTEGER (affinity mismatch) fails validation.
+    diesel::sql_query("DROP TABLE users")
+        .execute(&mut conn)
+        .unwrap();
+    diesel::sql_query(
+        "CREATE TABLE users (\
+         id TEXT PRIMARY KEY NOT NULL, \
+         username INTEGER NOT NULL, \
+         joined_on DATE NOT NULL, \
+         created_at TIMESTAMPTZ NOT NULL, \
+         is_deleted BOOLEAN NOT NULL, \
+         column_sync_metadata JSON NOT NULL)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+
+    // A view named `messages` occupies the table's namespace.
+    diesel::sql_query("DROP TABLE messages")
+        .execute(&mut conn)
+        .unwrap();
+    diesel::sql_query("CREATE VIEW messages AS SELECT id FROM users")
+        .execute(&mut conn)
+        .unwrap();
+
+    let result = sample_test_core::schema::run_migrations(&mut conn);
+
+    assert_wiped_migration_error(result, &["type mismatch"]);
+
+    // The view no longer occupies the `messages` namespace; `messages` exists
+    // again as a table.
+    let view_count: i64 = diesel::select(diesel::dsl::sql::<diesel::sql_types::BigInt>(
+        "COUNT(*) FROM sqlite_master WHERE type = 'view' AND name = 'messages'",
+    ))
+    .get_result(&mut conn)
+    .unwrap();
     assert_eq!(
-        after.len(),
-        12,
-        "no columns should be added or removed when migration fails"
+        view_count, 0,
+        "the namespace-occupying view should be dropped by the reset"
+    );
+    assert!(
+        !get_columns(&mut conn, "messages").is_empty(),
+        "messages should be recreated as a table"
+    );
+}
+
+/// An index occupying a table's namespace blocks the fresh run's CREATE TABLE
+/// for that name. Drift `users` so the reset runs; the reset drops the index
+/// named `messages` (created on `users` while `messages` is absent, since an
+/// index and a table cannot share a name), the fresh run recreates `messages`
+/// as a table, and the result is `Error::DatabaseWiped` with the original
+/// drift as the source.
+#[tokio::test]
+async fn test_reset_drops_blocking_indexes() {
+    let db = get_clean_test_client_db();
+    let mut conn = db.get_connection();
+
+    // Drift users: username as INTEGER (affinity mismatch) fails validation.
+    diesel::sql_query("DROP TABLE users")
+        .execute(&mut conn)
+        .unwrap();
+    diesel::sql_query(
+        "CREATE TABLE users (\
+         id TEXT PRIMARY KEY NOT NULL, \
+         username INTEGER NOT NULL, \
+         joined_on DATE NOT NULL, \
+         created_at TIMESTAMPTZ NOT NULL, \
+         is_deleted BOOLEAN NOT NULL, \
+         column_sync_metadata JSON NOT NULL)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+
+    // An index named `messages` occupies the table's namespace. It can only
+    // be created while no table or view named `messages` exists.
+    diesel::sql_query("DROP TABLE messages")
+        .execute(&mut conn)
+        .unwrap();
+    diesel::sql_query("CREATE INDEX messages ON users (id)")
+        .execute(&mut conn)
+        .unwrap();
+
+    let result = sample_test_core::schema::run_migrations(&mut conn);
+
+    assert_wiped_migration_error(result, &["type mismatch"]);
+
+    assert!(
+        !get_columns(&mut conn, "messages").is_empty(),
+        "messages should be recreated as a table"
     );
 }

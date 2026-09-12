@@ -524,6 +524,186 @@ pub mod client {
 
         Ok(())
     }
+
+    /// Drops all user tables, views, and indexes in a single transaction, leaving the database in
+    /// a clean state. Names are discovered via sqlite_master introspection, so the reset wipes the
+    /// whole local DB (managed and unmanaged entities) as a last-resort recovery. Tables, views,
+    /// and indexes share one namespace, so all must go for the post-reset re-creation of the
+    /// schema to succeed. SQLite internal tables (sqlite_%) are excluded. Called by generated
+    /// `run_migrations` after an unrecoverable migration error, so the schema can be recreated
+    /// from scratch.
+    pub fn reset_to_clean_state(conn: &mut diesel::SqliteConnection) -> crate::error::Result<()> {
+        use diesel::Connection;
+
+        conn.transaction(|conn| {
+            #[derive(diesel::QueryableByName)]
+            struct Entity {
+                #[diesel(sql_type = diesel::sql_types::Text)]
+                name: String,
+                #[diesel(sql_type = diesel::sql_types::Text)]
+                r#type: String,
+            }
+
+            let entities: Vec<Entity> = diesel::sql_query(
+                "SELECT name, type FROM sqlite_master \
+                 WHERE type IN ('table', 'view', 'index') AND name NOT LIKE 'sqlite_%'",
+            )
+            .load(conn)
+            .map_err(|e: diesel::result::Error| crate::error::Error::Unhandled {
+                message: "Failed to list entities during reset".to_string(),
+                source: e.into(),
+            })?;
+
+            for entity in entities {
+                let quoted = format!("\"{}\"", entity.name.replace('"', "\"\""));
+                let drop_stmt = match entity.r#type.as_str() {
+                    "table" => format!("DROP TABLE IF EXISTS {}", quoted),
+                    "view" => format!("DROP VIEW IF EXISTS {}", quoted),
+                    "index" => format!("DROP INDEX IF EXISTS {}", quoted),
+                    _ => unreachable!("query filters to tables, views and indexes"),
+                };
+                diesel::sql_query(drop_stmt).execute(conn).map_err(
+                    |e: diesel::result::Error| crate::error::Error::Unhandled {
+                        message: format!("Failed to drop '{}' during reset", entity.name),
+                        source: e.into(),
+                    },
+                )?;
+            }
+            Ok(())
+        })
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use diesel::Connection;
+
+        fn setup_conn() -> diesel::SqliteConnection {
+            let mut conn = diesel::SqliteConnection::establish(":memory:").unwrap();
+            for sql in [
+                "CREATE TABLE users (id TEXT PRIMARY KEY, name TEXT)",
+                "CREATE TABLE carburetor_offsets (table_name TEXT PRIMARY KEY, offset TEXT)",
+                "CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT)",
+                "CREATE TABLE counters (id INTEGER PRIMARY KEY AUTOINCREMENT, value TEXT NOT NULL)",
+                "CREATE INDEX idx_users_name ON users (name)",
+                "CREATE TRIGGER trg_counters AFTER INSERT ON counters BEGIN SELECT 1; END",
+                "CREATE VIEW active_users AS SELECT id, name FROM users",
+            ] {
+                diesel::sql_query(sql).execute(&mut conn).unwrap();
+            }
+            diesel::sql_query("INSERT INTO users VALUES ('u1', 'alice')")
+                .execute(&mut conn)
+                .unwrap();
+            diesel::sql_query("INSERT INTO app_settings VALUES ('theme', 'dark')")
+                .execute(&mut conn)
+                .unwrap();
+            diesel::sql_query("INSERT INTO counters (value) VALUES ('a')")
+                .execute(&mut conn)
+                .unwrap();
+            conn
+        }
+
+        fn entity_exists(
+            conn: &mut diesel::SqliteConnection,
+            entity_type: &str,
+            name: &str,
+        ) -> bool {
+            #[derive(diesel::QueryableByName)]
+            struct Row {
+                #[diesel(sql_type = diesel::sql_types::BigInt)]
+                count: i64,
+            }
+
+            let row: Row = diesel::sql_query(
+                "SELECT COUNT(*) AS count FROM sqlite_master WHERE type = ? AND name = ?",
+            )
+            .bind::<diesel::sql_types::Text, _>(entity_type)
+            .bind::<diesel::sql_types::Text, _>(name)
+            .get_result(conn)
+            .unwrap();
+            row.count > 0
+        }
+
+        #[test]
+        fn test_reset_drops_all_entities_excluding_sqlite_internals() {
+            let mut conn = setup_conn();
+
+            // AUTOINCREMENT from the counter table materializes the sqlite_sequence internal table
+            assert!(check_table_exists(&mut conn, "sqlite_sequence").unwrap());
+            assert!(check_table_exists(&mut conn, "users").unwrap());
+            assert!(entity_exists(&mut conn, "view", "active_users"));
+            assert!(entity_exists(&mut conn, "index", "idx_users_name"));
+
+            reset_to_clean_state(&mut conn).unwrap();
+            reset_to_clean_state(&mut conn).unwrap();
+
+            assert!(check_table_exists(&mut conn, "sqlite_sequence").unwrap());
+            assert!(!check_table_exists(&mut conn, "users").unwrap());
+            assert!(!check_table_exists(&mut conn, "carburetor_offsets").unwrap());
+            assert!(!check_table_exists(&mut conn, "app_settings").unwrap());
+            assert!(!check_table_exists(&mut conn, "counters").unwrap());
+            assert!(!entity_exists(&mut conn, "view", "active_users"));
+            assert!(!entity_exists(&mut conn, "index", "idx_users_name"));
+            assert!(!entity_exists(&mut conn, "trigger", "trg_counters"));
+        }
+
+        #[test]
+        fn test_reset_is_idempotent() {
+            let mut conn = setup_conn();
+
+            reset_to_clean_state(&mut conn).unwrap();
+            // Second reset on the already-empty DB must succeed.
+            reset_to_clean_state(&mut conn).unwrap();
+
+            assert!(!check_table_exists(&mut conn, "users").unwrap());
+            assert!(!entity_exists(&mut conn, "view", "active_users"));
+            assert!(!entity_exists(&mut conn, "index", "idx_users_name"));
+        }
+
+        #[test]
+        fn test_reset_with_virtual_table_shadow_tables() {
+            let mut conn = setup_conn();
+
+            diesel::sql_query("CREATE VIRTUAL TABLE messages USING fts5(body)")
+                .execute(&mut conn)
+                .unwrap();
+            // Lowercase SQL escapes the virtual-table-first sort; `IF EXISTS` must
+            // still keep the reset safe regardless of drop order.
+            diesel::sql_query("create virtual table notes using fts5(body)")
+                .execute(&mut conn)
+                .unwrap();
+
+            // sqlite_master lists FTS5 shadow tables (messages_data, messages_idx, ...)
+            // as ordinary tables; dropping the vtab removes them implicitly, so the reset
+            // must not fail when it later reaches those already-dropped names.
+            reset_to_clean_state(&mut conn).unwrap();
+
+            assert!(!check_table_exists(&mut conn, "messages").unwrap());
+            assert!(!check_table_exists(&mut conn, "messages_data").unwrap());
+            assert!(!check_table_exists(&mut conn, "messages_idx").unwrap());
+            assert!(!check_table_exists(&mut conn, "notes").unwrap());
+            assert!(!check_table_exists(&mut conn, "notes_data").unwrap());
+        }
+
+        #[test]
+        fn test_reset_with_keyword_and_special_char_names() {
+            let mut conn = setup_conn();
+
+            for sql in [
+                "CREATE TABLE \"order\" (id INTEGER PRIMARY KEY)",
+                "CREATE TABLE \"weird \"\" name\" (id INTEGER PRIMARY KEY)",
+                "CREATE VIEW \"group\" AS SELECT id FROM users",
+            ] {
+                diesel::sql_query(sql).execute(&mut conn).unwrap();
+            }
+
+            reset_to_clean_state(&mut conn).unwrap();
+
+            assert!(!check_table_exists(&mut conn, "order").unwrap());
+            assert!(!check_table_exists(&mut conn, "weird \" name").unwrap());
+            assert!(!entity_exists(&mut conn, "view", "group"));
+        }
+    }
 }
 
 #[cfg(for_backend)]
@@ -603,7 +783,7 @@ pub fn alter_table(
 pub use backend::check_table_exists;
 
 #[cfg(for_client)]
-pub use client::check_table_exists;
+pub use client::{check_table_exists, reset_to_clean_state};
 
 pub fn create_table(
     conn: &mut impl diesel::connection::SimpleConnection,
