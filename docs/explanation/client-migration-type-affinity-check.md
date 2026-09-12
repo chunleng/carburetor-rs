@@ -41,8 +41,11 @@ An exact string comparison would get both cases wrong: it would reject
 legitimate databases in the first case and, if loosened with aliases, could
 accept incompatible ones in the second.
 
-The error message names both the declared and the database type along with their
-affinities, so a mismatch is diagnosable without knowing the affinity rules.
+The error message names both the declared and the database type along with
+their affinities, so a mismatch is diagnosable without knowing the affinity
+rules. Since a mismatch of this kind is unrecoverable, the migration raises an
+error and resets the local database to a clean state; see
+[Why client migration resets the database to a clean state](client-migration-reset-to-clean-state.md).
 
 ## Tradeoff: coarse but honest
 
@@ -58,3 +61,4 @@ that actually behaves as declared.
 
 - [How to set up a client with auto-migration](../how-to/setup-client-auto-migration.md)
 - [Why some client migrations rebuild the whole table](client-migration-table-rebuild.md)
+- [Why client migration resets the database to a clean state](client-migration-reset-to-clean-state.md)
