@@ -69,5 +69,5 @@ updates never pay this cost.
 
 ## Related
 
-- [How to set up a client with auto-migration](../how-to/setup-client-auto-migration.md)
+- [How to set up auto-migration](../how-to/setup-auto-migration.md)
 - [Why client migration type checking compares affinity classes](client-migration-type-affinity-check.md)

@@ -394,6 +394,6 @@ If everything is configured correctly:
 
 ## Next steps
 
-- Enable automatic schema migration: [set up server auto-migration](../how-to/setup-server-auto-migration.md) and [set up client auto-migration](../how-to/setup-client-auto-migration.md)
+- Enable automatic schema migration: [set up auto-migration](../how-to/setup-auto-migration.md)
 - Learn the full `carburetor_sync_config!` syntax: [table reference](../reference/sync-config/table.md) and [sync-group reference](../reference/sync-config/sync-group.md)
 - Understand the design: [why sync groups exist](../explanation/sync-groups.md)
