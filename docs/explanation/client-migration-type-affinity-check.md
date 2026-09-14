@@ -59,6 +59,6 @@ that actually behaves as declared.
 
 ## Related
 
-- [How to set up a client with auto-migration](../how-to/setup-client-auto-migration.md)
+- [How to set up auto-migration](../how-to/setup-auto-migration.md)
 - [Why some client migrations rebuild the whole table](client-migration-table-rebuild.md)
 - [Why client migration resets the database to a clean state](client-migration-reset-to-clean-state.md)

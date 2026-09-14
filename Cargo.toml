@@ -11,6 +11,7 @@ members = [
 
 [workspace.package]
 version = "0.1.2"
+rust-version = "1.88"
 repository = "https://github.com/chunleng/carburetor-rs"
 authors = ["ChunLeng Lim"]
 edition = "2024"
