@@ -1,5 +1,6 @@
 use diesel::{QueryableByName, RunQueryDsl};
-use e2e_test::get_clean_test_client_db;
+use e2e_test::{TestSyncGroup, get_clean_test_client_db};
+use sample_test_core::schema::all_clients;
 
 #[derive(Debug, QueryableByName)]
 struct PragmaColumnInfo {
@@ -43,7 +44,7 @@ fn assert_column(
 
 #[tokio::test]
 async fn test_clean_migration_creates_all_tables() {
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     let users = get_columns(&mut conn, "users");
@@ -98,7 +99,7 @@ async fn test_clean_migration_creates_all_tables() {
 /// should gain all 6 omitted columns with correct attributes.
 #[tokio::test]
 async fn test_existing_table_missing_columns_gets_added() {
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     diesel::sql_query("DROP TABLE users")
@@ -119,7 +120,7 @@ async fn test_existing_table_missing_columns_gets_added() {
     let before = get_columns(&mut conn, "users");
     assert_eq!(before.len(), 6, "table should start with 6 columns");
 
-    sample_test_core::schema::run_migrations(&mut conn).unwrap();
+    all_clients::run_migrations(&mut conn).unwrap();
 
     let after = get_columns(&mut conn, "users");
     assert_eq!(
@@ -161,7 +162,7 @@ struct UserRow {
 /// both columns to nullable, and preserve all existing row data.
 #[tokio::test]
 async fn test_multiple_columns_relaxed_in_single_rebuild() {
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     diesel::sql_query("DROP TABLE users")
@@ -197,7 +198,7 @@ async fn test_multiple_columns_relaxed_in_single_rebuild() {
     assert_column(&before, "first_name", "TEXT", true, false, None);
     assert_column(&before, "nickname", "TEXT", true, false, None);
 
-    sample_test_core::schema::run_migrations(&mut conn).unwrap();
+    all_clients::run_migrations(&mut conn).unwrap();
 
     let after = get_columns(&mut conn, "users");
     assert_eq!(after.len(), 12, "table should still have 12 columns");
@@ -215,4 +216,20 @@ async fn test_multiple_columns_relaxed_in_single_rebuild() {
     assert_eq!(rows[0].first_name, "Alice");
     assert_eq!(rows[0].nickname.as_deref(), Some("Alice A"));
     assert_eq!(rows[0].priority, 5);
+}
+
+/// Each sync group migrates only its own tables. Resetting the shared test
+/// DB with the `UserOnly` sync group must create `users` and
+/// `carburetor_offsets` but not `messages`, which belongs to `all_clients`.
+#[tokio::test]
+async fn test_user_only_migration_creates_only_user_tables() {
+    let db = get_clean_test_client_db(TestSyncGroup::UserOnly);
+    let mut conn = db.get_connection();
+
+    assert!(!get_columns(&mut conn, "users").is_empty());
+    assert!(!get_columns(&mut conn, "carburetor_offsets").is_empty());
+    assert!(
+        get_columns(&mut conn, "messages").is_empty(),
+        "messages is not in user_only sync group and must not be created"
+    );
 }

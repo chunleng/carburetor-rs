@@ -1,6 +1,6 @@
 use carburetor::chrono::NaiveDate;
 use diesel::{RunQueryDsl, SelectableHelper, query_dsl::methods::SelectDsl};
-use e2e_test::{TestBackendHandle, get_clean_test_client_db};
+use e2e_test::{TestBackendHandle, TestSyncGroup, get_clean_test_client_db};
 use sample_test_core::{
     backend_service::TestBackendClient,
     schema::{all_clients, user_only},
@@ -49,7 +49,7 @@ async fn insert_dummy_user(backend: &TestBackendClient, id: &str, is_deleted: bo
 async fn test_download_from_offset() {
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     insert_dummy_user(&backend, "a", false).await;
@@ -98,7 +98,7 @@ async fn test_download_from_offset() {
 async fn test_clean_download() {
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     insert_dummy_user(&backend, "a", false).await;
@@ -130,7 +130,7 @@ async fn test_clean_download() {
 async fn test_download_only_returns_messages_matching_context() {
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
-    let _db = get_clean_test_client_db();
+    let _db = get_clean_test_client_db(TestSyncGroup::AllClients);
 
     insert_dummy_message(&backend, "msg-a", "user-1", false).await;
     insert_dummy_message(&backend, "msg-b", "user-2", false).await;

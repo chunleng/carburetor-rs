@@ -1,6 +1,6 @@
 use carburetor::helpers::client_sync_metadata::ClientSyncMetadata;
 use diesel::{RunQueryDsl, SelectableHelper, query_dsl::methods::SelectDsl};
-use e2e_test::{TestBackendHandle, get_clean_test_client_db};
+use e2e_test::{TestBackendHandle, TestSyncGroup, get_clean_test_client_db};
 use sample_test_core::schema::{all_clients, user_only};
 use tarpc::context::current as ctx;
 
@@ -8,7 +8,7 @@ use tarpc::context::current as ctx;
 async fn test_upload_with_no_dirty_record() {
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     // Insert a clean (non-dirty) user record
@@ -62,7 +62,7 @@ async fn test_upload_with_no_dirty_record() {
 async fn test_upload_with_inserted_dirty_record() {
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     // Insert a user with dirty flag set to "insert"
@@ -162,7 +162,7 @@ async fn test_upload_with_inserted_dirty_record() {
 async fn test_upload_with_updated_dirty_record() {
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     // First, insert the user on the backend
@@ -310,7 +310,7 @@ async fn test_upload_with_updated_dirty_record() {
 async fn test_upload_update_message_matching_context() {
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     backend
@@ -384,7 +384,7 @@ async fn test_upload_update_message_matching_context() {
 async fn test_upload_insert_message_matching_context() {
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     let dirty_message = all_clients::InsertableMessage {

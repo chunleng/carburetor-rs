@@ -1,7 +1,10 @@
 use carburetor::chrono::NaiveDate;
 use diesel::{RunQueryDsl, SelectableHelper, query_dsl::methods::SelectDsl};
-use e2e_test::{TestBackendHandle, get_clean_test_client_db};
-use sample_test_core::{backend_service::TestBackendClient, schema::user_only};
+use e2e_test::{TestBackendHandle, TestSyncGroup, get_clean_test_client_db};
+use sample_test_core::{
+    backend_service::TestBackendClient,
+    schema::{all_clients, user_only},
+};
 use tarpc::context::current as ctx;
 
 async fn insert_dummy_user(backend: &TestBackendClient, id: &str) {
@@ -50,7 +53,7 @@ fn stored_users(conn: &mut diesel::SqliteConnection) -> Vec<user_only::FullUser>
 async fn test_reset_dropped_offsets_cause_full_resync() {
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     insert_dummy_user(&backend, "a").await;
@@ -79,7 +82,7 @@ async fn test_reset_dropped_offsets_cause_full_resync() {
     .execute(&mut conn)
     .unwrap();
 
-    let result = sample_test_core::schema::run_migrations(&mut conn);
+    let result = all_clients::run_migrations(&mut conn);
     let err = result.unwrap_err();
     assert!(
         matches!(err, carburetor::error::Error::DatabaseWiped { .. }),
@@ -93,8 +96,7 @@ async fn test_reset_dropped_offsets_cause_full_resync() {
     );
 
     // Re-migration succeeds on the fresh schema.
-    sample_test_core::schema::run_migrations(&mut conn)
-        .expect("re-migration should succeed on fresh schema");
+    all_clients::run_migrations(&mut conn).expect("re-migration should succeed on fresh schema");
 
     // Offsets were dropped with the reset, so the download returns every
     // backend row again (full re-sync, not incremental).

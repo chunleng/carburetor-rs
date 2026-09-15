@@ -1,5 +1,6 @@
 use diesel::{QueryableByName, RunQueryDsl};
-use e2e_test::get_clean_test_client_db;
+use e2e_test::{TestSyncGroup, get_clean_test_client_db};
+use sample_test_core::schema::all_clients;
 
 #[derive(Debug, QueryableByName)]
 #[allow(dead_code)]
@@ -28,7 +29,7 @@ fn get_columns(conn: &mut diesel::SqliteConnection, table: &str) -> Vec<PragmaCo
 /// "table _carburetor_tmp already exists".
 #[tokio::test]
 async fn test_stale_tmp_table_does_not_block_rebuild() {
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     // Set up users with first_name and nickname as NOT NULL (both declared
@@ -59,7 +60,7 @@ async fn test_stale_tmp_table_does_not_block_rebuild() {
         .execute(&mut conn)
         .unwrap();
 
-    sample_test_core::schema::run_migrations(&mut conn)
+    all_clients::run_migrations(&mut conn)
         .expect("migration should succeed despite stale _carburetor_tmp table");
 
     // The stale temp table should be gone (renamed to users)

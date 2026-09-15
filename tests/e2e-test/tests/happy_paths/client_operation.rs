@@ -1,11 +1,11 @@
 use carburetor::chrono::NaiveDate;
 use diesel::{RunQueryDsl, SelectableHelper, query_dsl::methods::SelectDsl};
-use e2e_test::get_clean_test_client_db;
+use e2e_test::{TestSyncGroup, get_clean_test_client_db};
 use sample_test_core::schema::user_only;
 
 #[tokio::test]
 async fn test_insert_user() {
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     // Capture time before insert to verify created_at default
@@ -106,7 +106,7 @@ async fn test_insert_user() {
 
 #[tokio::test]
 async fn test_active_users() {
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     // Insert two users: one active, one soft-deleted
@@ -160,7 +160,7 @@ async fn test_active_users() {
 
 #[tokio::test]
 async fn test_delete_user() {
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     // First, insert a user directly using diesel
@@ -208,7 +208,7 @@ async fn test_delete_user() {
 
 #[tokio::test]
 async fn test_update_user() {
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     // First, insert a user directly using diesel

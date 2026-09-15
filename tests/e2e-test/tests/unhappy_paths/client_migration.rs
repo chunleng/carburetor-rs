@@ -1,5 +1,6 @@
 use diesel::{QueryableByName, RunQueryDsl};
-use e2e_test::get_clean_test_client_db;
+use e2e_test::{TestSyncGroup, get_clean_test_client_db};
+use sample_test_core::schema::all_clients;
 
 #[derive(Debug, QueryableByName)]
 #[allow(dead_code)]
@@ -127,7 +128,7 @@ fn assert_wiped_migration_error(
 /// state: `users` is recreated from the declared schema.
 #[tokio::test]
 async fn test_existing_table_missing_non_nullable_without_default_errors() {
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     diesel::sql_query("DROP TABLE users")
@@ -144,7 +145,7 @@ async fn test_existing_table_missing_non_nullable_without_default_errors() {
     .execute(&mut conn)
     .unwrap();
 
-    let result = sample_test_core::schema::run_migrations(&mut conn);
+    let result = all_clients::run_migrations(&mut conn);
     assert_wiped_migration_error(result, &["username", "users", "no default specified"]);
 
     assert_declared_users_schema(&mut conn);
@@ -155,7 +156,7 @@ async fn test_existing_table_missing_non_nullable_without_default_errors() {
 /// naming the column, table, and types, then reset the DB to a clean state.
 #[tokio::test]
 async fn test_type_mismatch_affinity_fails() {
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     diesel::sql_query("DROP TABLE users")
@@ -173,7 +174,7 @@ async fn test_type_mismatch_affinity_fails() {
     .execute(&mut conn)
     .unwrap();
 
-    let result = sample_test_core::schema::run_migrations(&mut conn);
+    let result = all_clients::run_migrations(&mut conn);
     assert_wiped_migration_error(
         result,
         &["type mismatch", "username", "users", "TEXT", "INTEGER"],
@@ -187,7 +188,7 @@ async fn test_type_mismatch_affinity_fails() {
 /// the column and table, then reset the DB to a clean state.
 #[tokio::test]
 async fn test_extra_not_null_column_without_default_fails() {
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     diesel::sql_query("DROP TABLE users")
@@ -206,7 +207,7 @@ async fn test_extra_not_null_column_without_default_fails() {
     .execute(&mut conn)
     .unwrap();
 
-    let result = sample_test_core::schema::run_migrations(&mut conn);
+    let result = all_clients::run_migrations(&mut conn);
     assert_wiped_migration_error(result, &["extra_required", "users", "NOT NULL"]);
 
     assert_declared_users_schema(&mut conn);
@@ -218,7 +219,7 @@ async fn test_extra_not_null_column_without_default_fails() {
 /// clean-state reset, so both tables are recreated from the declared schema.
 #[tokio::test]
 async fn test_partial_migration_rolls_back_all_changes() {
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     // Users without first_name (nullable, re-addable by migration)
@@ -261,7 +262,7 @@ async fn test_partial_migration_rolls_back_all_changes() {
     .execute(&mut conn)
     .unwrap();
 
-    let result = sample_test_core::schema::run_migrations(&mut conn);
+    let result = all_clients::run_migrations(&mut conn);
     assert_wiped_migration_error(result, &["type mismatch", "subject", "messages"]);
 
     assert_declared_users_schema(&mut conn);
@@ -275,7 +276,7 @@ async fn test_partial_migration_rolls_back_all_changes() {
 /// from the declared schema regardless of which table failed.
 #[tokio::test]
 async fn test_partial_migration_rolls_back_all_changes_reversed() {
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     // Messages without notes (nullable, re-addable by migration)
@@ -318,7 +319,7 @@ async fn test_partial_migration_rolls_back_all_changes_reversed() {
     .execute(&mut conn)
     .unwrap();
 
-    let result = sample_test_core::schema::run_migrations(&mut conn);
+    let result = all_clients::run_migrations(&mut conn);
     assert_wiped_migration_error(result, &["type mismatch", "priority", "users"]);
 
     assert_declared_users_schema(&mut conn);
@@ -330,7 +331,7 @@ async fn test_partial_migration_rolls_back_all_changes_reversed() {
 /// reset the DB to a clean state.
 #[tokio::test]
 async fn test_primary_key_mismatch_fails() {
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     diesel::sql_query("DROP TABLE users")
@@ -354,7 +355,7 @@ async fn test_primary_key_mismatch_fails() {
     .execute(&mut conn)
     .unwrap();
 
-    let result = sample_test_core::schema::run_migrations(&mut conn);
+    let result = all_clients::run_migrations(&mut conn);
     assert_wiped_migration_error(result, &["primary key mismatch", "id", "users"]);
 
     assert_declared_users_schema(&mut conn);
@@ -365,7 +366,7 @@ async fn test_primary_key_mismatch_fails() {
 /// then reset the DB to a clean state.
 #[tokio::test]
 async fn test_nullable_tightening_fails() {
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     diesel::sql_query("DROP TABLE users")
@@ -389,7 +390,7 @@ async fn test_nullable_tightening_fails() {
     .execute(&mut conn)
     .unwrap();
 
-    let result = sample_test_core::schema::run_migrations(&mut conn);
+    let result = all_clients::run_migrations(&mut conn);
     assert_wiped_migration_error(result, &["nullability mismatch", "username", "users"]);
 
     assert_declared_users_schema(&mut conn);
@@ -401,7 +402,7 @@ async fn test_nullable_tightening_fails() {
 /// assert the error surfaces as Error::Database and the schema is untouched.
 #[tokio::test]
 async fn test_database_error_does_not_trigger_reset() {
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     // Force a write during migration: users is missing and must be created.
@@ -423,7 +424,7 @@ async fn test_database_error_does_not_trigger_reset() {
         .execute(&mut locker)
         .unwrap();
 
-    let result = sample_test_core::schema::run_migrations(&mut conn);
+    let result = all_clients::run_migrations(&mut conn);
 
     // Release the lock before asserting: the DB is shared across tests.
     diesel::sql_query("ROLLBACK").execute(&mut locker).unwrap();
@@ -458,7 +459,7 @@ async fn test_database_error_does_not_trigger_reset() {
 /// result is `Error::DatabaseWiped` with the original drift as the source.
 #[tokio::test]
 async fn test_reset_drops_blocking_views() {
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     // Drift users: username as INTEGER (affinity mismatch) fails validation.
@@ -485,7 +486,7 @@ async fn test_reset_drops_blocking_views() {
         .execute(&mut conn)
         .unwrap();
 
-    let result = sample_test_core::schema::run_migrations(&mut conn);
+    let result = all_clients::run_migrations(&mut conn);
 
     assert_wiped_migration_error(result, &["type mismatch"]);
 
@@ -514,7 +515,7 @@ async fn test_reset_drops_blocking_views() {
 /// drift as the source.
 #[tokio::test]
 async fn test_reset_drops_blocking_indexes() {
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     // Drift users: username as INTEGER (affinity mismatch) fails validation.
@@ -542,7 +543,7 @@ async fn test_reset_drops_blocking_indexes() {
         .execute(&mut conn)
         .unwrap();
 
-    let result = sample_test_core::schema::run_migrations(&mut conn);
+    let result = all_clients::run_migrations(&mut conn);
 
     assert_wiped_migration_error(result, &["type mismatch"]);
 
