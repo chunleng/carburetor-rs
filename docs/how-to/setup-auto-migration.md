@@ -59,9 +59,12 @@ pub fn run_migrations(conn: &mut diesel::PgConnection)
 
 ### 3. Make the migration feature work for the client
 
-On the client, `run_migrations` can report that the local database was
-unrecoverably out of sync and had to be reset. On top of your existing client
-setup, add the following:
+On the client, `run_migrations` is generated inside the sync group's module and
+covers only that group's tables (plus `carburetor_offsets`). This guide uses a
+single sync group, `user`.
+
+On top of your existing client setup, add the following (adjust the call path to
+match your module layout):
 
 ```rust
 use carburetor::error::Error;
@@ -70,7 +73,8 @@ use diesel::prelude::*;
 let mut connection =
     SqliteConnection::establish(&database_path).expect("Error connecting to database");
 
-match run_migrations(&mut connection) {
+// `user` is a sync group; its `run_migrations` lives in its module.
+match user::run_migrations(&mut connection) {
     Ok(()) => {}
     Err(Error::DatabaseWiped { source }) => {
         // The local database was unrecoverably out of sync with the declared
@@ -86,7 +90,7 @@ match run_migrations(&mut connection) {
 See [reset to a clean state](../explanation/client-migration-reset-to-clean-state.md)
 for why the reset happens and how the client recovers its data.
 
-The generated signature is:
+The generated signature is scoped to the group's module:
 
 ```rust
 pub fn run_migrations(conn: &mut diesel::SqliteConnection)
