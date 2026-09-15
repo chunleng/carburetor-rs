@@ -43,7 +43,18 @@ impl CarburetorSyncGroup {
                             {
                                 let value = contexts.get(&restrict_to.context_variable);
                                 if let Some(v) = value {
-                                    if v != &restrict_to.column_reference.diesel_type {}
+                                    if v != &restrict_to.column_reference.diesel_type {
+                                        return Err(Error::new_spanned(
+                                            &restrict_to.column_reference.ident,
+                                            format!(
+                                                "context variable `${}` is restricted to \
+                                                 conflicting column types: `{}` and `{}`",
+                                                restrict_to.context_variable,
+                                                v,
+                                                restrict_to.column_reference.diesel_type,
+                                            ),
+                                        ));
+                                    }
                                 } else {
                                     contexts.insert(
                                         restrict_to.context_variable.clone(),
@@ -152,30 +163,42 @@ impl SyncGroupTableConfig {
 #[cfg(test)]
 mod tests {
     use crate::parsers::table::column::{
-        ClientColumnSyncMetadata, DirtyFlagColumn, IdColumn, IsDeletedColumn, LastSyncedAtColumn,
-        SyncMetadataColumns,
+        CarburetorColumnType, ClientColumnSyncMetadata, ColumnScope, DirtyFlagColumn, IdColumn,
+        IsDeletedColumn, LastSyncedAtColumn, SyncMetadataColumns,
     };
     use std::ops::Deref;
 
     use super::*;
     use quote::format_ident;
+    use syn::parse_quote;
+
+    use crate::parsers::syntax::block::DeclarationArgumentValue;
 
     fn create_test_table(name: &str) -> Rc<CarburetorTable> {
+        create_test_table_with_columns(name, vec![])
+    }
+
+    fn create_test_table_with_columns(
+        name: &str,
+        extra_columns: Vec<Rc<CarburetorColumn>>,
+    ) -> Rc<CarburetorTable> {
         let id = IdColumn::default();
         let last_synced_at = LastSyncedAtColumn::default();
         let is_deleted = IsDeletedColumn::default();
         let dirty_flag = DirtyFlagColumn::default();
         let client_column_sync_metadata = ClientColumnSyncMetadata::default();
+        let mut columns = vec![
+            id.deref().clone(),
+            last_synced_at.deref().clone(),
+            is_deleted.deref().clone(),
+            dirty_flag.deref().clone(),
+            client_column_sync_metadata.deref().clone(),
+        ];
+        columns.extend(extra_columns);
         Rc::new(CarburetorTable {
             ident: format_ident!("{}", name),
             plural_ident: format_ident!("dummy"),
-            columns: vec![
-                id.deref().clone(),
-                last_synced_at.deref().clone(),
-                is_deleted.deref().clone(),
-                dirty_flag.deref().clone(),
-                client_column_sync_metadata.deref().clone(),
-            ],
+            columns,
             sync_metadata_columns: SyncMetadataColumns {
                 id,
                 last_synced_at,
@@ -184,6 +207,38 @@ mod tests {
                 client_column_sync_metadata,
             },
         })
+    }
+
+    fn immutable_column(name: &str, diesel_type: DieselPostgresType) -> Rc<CarburetorColumn> {
+        Rc::new(CarburetorColumn {
+            ident: format_ident!("{}", name),
+            diesel_type,
+            column_scope: ColumnScope::Both,
+            default_value: None,
+            column_type: CarburetorColumnType::Data,
+            is_immutable: true,
+        })
+    }
+
+    fn restrict_to_arguments(context_variable: &str, column: &str) -> Vec<DeclarationArgument> {
+        let context_variable = format_ident!("{}", context_variable);
+        let column = format_ident!("{}", column);
+        vec![
+            DeclarationArgument {
+                name: format_ident!("restrict_to"),
+                value: DeclarationArgumentValue {
+                    name: parse_quote! { #context_variable },
+                    dollar_prefixed: true,
+                },
+            },
+            DeclarationArgument {
+                name: format_ident!("restrict_to_column"),
+                value: DeclarationArgumentValue {
+                    name: parse_quote! { #column },
+                    dollar_prefixed: false,
+                },
+            },
+        ]
     }
 
     #[test]
@@ -261,5 +316,78 @@ mod tests {
             CarburetorSyncGroup::from_lookup_table_names(name, &table_settings, &tables_lookup);
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_from_lookup_table_names_restrict_to_matching_types() {
+        let tables_lookup = vec![
+            create_test_table_with_columns(
+                "table_a",
+                vec![immutable_column("user_id", DieselPostgresType::Text)],
+            ),
+            create_test_table_with_columns(
+                "table_b",
+                vec![immutable_column("owner_id", DieselPostgresType::Text)],
+            ),
+        ];
+        let table_settings = vec![
+            DeclarationSettingBlock {
+                ident: format_ident!("table_a"),
+                arguments: restrict_to_arguments("user_id", "user_id"),
+            },
+            DeclarationSettingBlock {
+                ident: format_ident!("table_b"),
+                arguments: restrict_to_arguments("user_id", "owner_id"),
+            },
+        ];
+
+        let result = CarburetorSyncGroup::from_lookup_table_names(
+            format_ident!("test_group"),
+            &table_settings,
+            &tables_lookup,
+        )
+        .unwrap();
+
+        assert_eq!(result.contexts.len(), 1);
+        assert_eq!(
+            result.contexts.get("user_id"),
+            Some(&DieselPostgresType::Text)
+        );
+    }
+
+    #[test]
+    fn test_from_lookup_table_names_restrict_to_type_mismatch() {
+        let tables_lookup = vec![
+            create_test_table_with_columns(
+                "table_a",
+                vec![immutable_column("user_id", DieselPostgresType::Text)],
+            ),
+            create_test_table_with_columns(
+                "table_b",
+                vec![immutable_column("user_id", DieselPostgresType::Integer)],
+            ),
+        ];
+        let table_settings = vec![
+            DeclarationSettingBlock {
+                ident: format_ident!("table_a"),
+                arguments: restrict_to_arguments("user_id", "user_id"),
+            },
+            DeclarationSettingBlock {
+                ident: format_ident!("table_b"),
+                arguments: restrict_to_arguments("user_id", "user_id"),
+            },
+        ];
+
+        let result = CarburetorSyncGroup::from_lookup_table_names(
+            format_ident!("test_group"),
+            &table_settings,
+            &tables_lookup,
+        );
+
+        let error = result.unwrap_err().to_string();
+        assert!(error.contains("conflicting column types"), "{error}");
+        assert!(error.contains("$user_id"), "{error}");
+        assert!(error.contains("Text"), "{error}");
+        assert!(error.contains("Integer"), "{error}");
     }
 }
