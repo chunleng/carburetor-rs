@@ -126,6 +126,9 @@ Sync helpers:
 - `process_upload_request_<table>()`: applies uploaded records with an LWW merge
   using column timestamps
 
+With the `migration` feature enabled, the backend also generates a single
+top-level `run_migrations` covering all tables in the `tables` block
+
 ## Usage notes
 
 - Tables are assigned to sync groups with the `sync_groups` block; see

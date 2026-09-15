@@ -35,8 +35,10 @@ pub(crate) fn generate_carburetor_sync_config(
         });
     }
 
-    #[cfg(feature = "migration")]
-    generate_run_migrations(tokens, &sync_config.tables);
+    if get_target_type() == TargetType::Backend {
+        #[cfg(feature = "migration")]
+        generate_run_migrations(tokens, &sync_config.tables);
+    }
 
     sync_config.sync_groups.iter().for_each(|x| {
         let mut mod_tokens = TokenStream::new();
@@ -73,6 +75,18 @@ pub(crate) fn generate_carburetor_sync_config(
 
             generate_local_operation_functions(&mut mod_tokens, &x);
             generate_local_operation_models(&mut mod_tokens, &x);
+
+            // Each sync group is an independent entity on its own data source, so
+            // it gets its own migration covering only the tables it syncs.
+            #[cfg(feature = "migration")]
+            {
+                let group_tables: Vec<_> = x
+                    .table_configs
+                    .iter()
+                    .map(|config| std::rc::Rc::clone(&config.reference_table))
+                    .collect();
+                generate_run_migrations(&mut mod_tokens, &group_tables);
+            }
         }
 
         let mod_name = &x.name;

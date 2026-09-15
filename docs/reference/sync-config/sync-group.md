@@ -41,6 +41,8 @@ table name from the `tables` block; a table may appear in multiple groups.
 
 - Each block can be defined at most once. A second `sync_groups` block fails
   macro expansion with `` `sync_groups` can only be defined once ``.
+- Each sync group (sync client) must target its own data source. Running two
+  groups' `run_migrations` against one database is not the intended design.
 
 ## Effect on generated code
 
@@ -56,6 +58,10 @@ Each group name becomes a module (`pub mod <group_name>`) that contains the
 generated functions and models for the group's tables. Details of those outputs
 are documented in [table.md](table.md).
 
+With the `migration` feature enabled, each group also generates a
+`run_migrations` function on the client, inside the group's module. It covers
+only the tables in that group, plus `carburetor_offsets`.
+
 ## Usage notes
 
 - Declare every table in the `tables` block before referencing it in a group;
@@ -63,3 +69,11 @@ are documented in [table.md](table.md).
   is tracked in
   [chunleng/carburetor-rs#32](https://github.com/chunleng/carburetor-rs/issues/32).
 - A table can belong to several groups; each group syncs it independently.
+- Give each group its own database and call its `run_migrations` against that
+  database only:
+
+  ```rust
+  // One database per sync group
+  user_data::run_migrations(&user_db_conn)?;
+  admin_data::run_migrations(&admin_db_conn)?;
+  ```

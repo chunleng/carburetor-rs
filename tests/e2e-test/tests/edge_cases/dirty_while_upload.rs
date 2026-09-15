@@ -1,5 +1,5 @@
 use diesel::{RunQueryDsl, SelectableHelper, query_dsl::methods::SelectDsl};
-use e2e_test::{TestBackendHandle, get_clean_test_client_db};
+use e2e_test::{TestBackendHandle, TestSyncGroup, get_clean_test_client_db};
 use sample_test_core::schema::user_only;
 use tarpc::context::current as ctx;
 
@@ -7,7 +7,7 @@ use tarpc::context::current as ctx;
 async fn test_upload_insert_and_update_between_retrieve_and_store() {
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     // Insert a user — dirty_flag="insert"
@@ -73,7 +73,7 @@ async fn test_upload_insert_and_update_between_retrieve_and_store() {
 async fn test_upload_update_and_update_same_column_between_retrieve_and_store() {
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     // Seed backend and client with an already-synced user

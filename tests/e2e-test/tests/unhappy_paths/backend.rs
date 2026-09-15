@@ -1,6 +1,6 @@
 use carburetor::models::UploadTableResponseErrorType;
 use diesel::RunQueryDsl;
-use e2e_test::{TestBackendHandle, get_clean_test_client_db};
+use e2e_test::{TestBackendHandle, TestSyncGroup, get_clean_test_client_db};
 use sample_test_core::schema::{all_clients, user_only};
 use tarpc::context::current as ctx;
 
@@ -8,7 +8,7 @@ use tarpc::context::current as ctx;
 async fn test_upload_update_record_not_on_backend() {
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     let dirty_at = carburetor::helpers::get_utc_now().to_rfc3339();
@@ -67,7 +67,7 @@ async fn test_upload_update_record_not_on_backend() {
 async fn test_upload_insert_record_already_exists_on_backend() {
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     // Pre-insert the record on the backend
@@ -141,7 +141,7 @@ async fn test_upload_insert_record_already_exists_on_backend() {
 async fn test_upload_insert_message_mismatching_context() {
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     let dirty_message = all_clients::InsertableMessage {
@@ -193,7 +193,7 @@ async fn test_upload_insert_message_mismatching_context() {
 async fn test_upload_update_message_mismatching_context() {
     let backend_server = TestBackendHandle::start();
     let backend = backend_server.client().await;
-    let db = get_clean_test_client_db();
+    let db = get_clean_test_client_db(TestSyncGroup::AllClients);
     let mut conn = db.get_connection();
 
     backend

@@ -91,8 +91,26 @@ impl Drop for TestBackendHandle {
     }
 }
 
+/// Which sync group's migration the shared test DB is set up with.
+#[derive(Clone, Copy)]
+pub enum TestSyncGroup {
+    AllClients,
+    UserOnly,
+}
+
+impl TestSyncGroup {
+    fn run_migrations(self, conn: &mut SqliteConnection) -> Result<(), carburetor::error::Error> {
+        use sample_test_core::schema;
+        match self {
+            TestSyncGroup::AllClients => schema::all_clients::run_migrations(conn),
+            TestSyncGroup::UserOnly => schema::user_only::run_migrations(conn),
+        }
+    }
+}
+
 pub struct TestClientDatabase {
     _temp_dir: TempDir,
+    sync_group: TestSyncGroup,
 }
 
 impl TestClientDatabase {
@@ -113,6 +131,7 @@ impl TestClientDatabase {
 
         Self {
             _temp_dir: temp_dir,
+            sync_group: TestSyncGroup::AllClients,
         }
     }
 
@@ -129,7 +148,9 @@ impl TestClientDatabase {
         // (This is safe because the config is already set, and get_connection uses the same path)
         let mut conn = get_connection().unwrap();
 
-        sample_test_core::schema::run_migrations(&mut conn).expect("Failed to run migrations");
+        self.sync_group
+            .run_migrations(&mut conn)
+            .expect("Failed to run migrations");
     }
 }
 
@@ -138,9 +159,12 @@ impl TestClientDatabase {
 /// parallel tests serialize on DB access while backend startup overlaps.
 /// Poison is recovered from — `reset()` recreates the DB from scratch, so
 /// a panicked previous test does not corrupt the next test's data.
-pub fn get_clean_test_client_db() -> MutexGuard<'static, TestClientDatabase> {
+pub fn get_clean_test_client_db(
+    sync_group: TestSyncGroup,
+) -> MutexGuard<'static, TestClientDatabase> {
     let db = TEST_CLIENT_DB.get_or_init(|| Mutex::new(TestClientDatabase::new()));
-    let guard = db.lock().unwrap_or_else(|e| e.into_inner());
+    let mut guard = db.lock().unwrap_or_else(|e| e.into_inner());
+    guard.sync_group = sync_group;
     guard.reset();
     guard
 }
