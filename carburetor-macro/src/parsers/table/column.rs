@@ -164,7 +164,7 @@ impl TryFrom<DieselTableStyleContent> for CarburetorColumn {
                     if diesel_type != DieselPostgresType::Bool {
                         return Err(Error::new_spanned(
                             value.name,
-                            "#[is_deleted] needs to be of type `Boolean`",
+                            "#[is_deleted] needs to be of type `Bool`",
                         ));
                     }
                     if column_type != CarburetorColumnType::default() {
