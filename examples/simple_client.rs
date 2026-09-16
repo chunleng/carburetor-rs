@@ -36,6 +36,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => return Err(e.into()),
     }
 
+    schema::all_clients::apply_backfill()?;
+
     println!("Check download sync offsets (Null for all):");
     dbg!(all_clients::retrieve_download_request()?);
 

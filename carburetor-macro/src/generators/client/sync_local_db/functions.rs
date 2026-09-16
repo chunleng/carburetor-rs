@@ -6,7 +6,7 @@ use crate::{
     generators::{
         client::models::AsTableMetadata,
         diesel::{
-            models::{AsChangesetModel, AsFullModel, AsInsertModel},
+            models::{AsChangesetModel, AsFullModel, AsInsertModel, AsModelType},
             schema::AsSchemaTable,
         },
         download::models::{AsDownloadResponseModel, AsDownloadResponseTableModel},
@@ -158,6 +158,131 @@ impl<'a> ToTokens for AsSyncTableToLocalDbFunction<'a> {
     }
 }
 
+struct AsBackfillTableFunction<'a> {
+    table: &'a CarburetorTable,
+}
+
+impl<'a> AsBackfillTableFunction<'a> {
+    fn get_function_name(&self) -> Ident {
+        Ident::new(
+            &format!("backfill_{}", self.table.ident),
+            self.table.ident.span(),
+        )
+    }
+}
+
+impl<'a> ToTokens for AsBackfillTableFunction<'a> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let function_name = self.get_function_name();
+        let table_name = AsSchemaTable(self.table).get_table_name();
+        let changeset_model_name = AsChangesetModel(self.table).get_model_name();
+        let table_metadata_model_name = AsTableMetadata(self.table).get_struct_name();
+        let id_column_name = &self.table.sync_metadata_columns.id.ident;
+        let id_type = AsModelType(&self.table.sync_metadata_columns.id.diesel_type);
+        let column_sync_metadata_column_name = &self
+            .table
+            .sync_metadata_columns
+            .client_column_sync_metadata
+            .ident;
+
+        // The changeset starts with only the id set; applied columns are filled in by the
+        // backfill callback below. `None` fields are skipped by `AsChangeset`.
+        let changeset_fields = self.table.columns.iter().map(|x| {
+            let column_name = &x.ident;
+            match x.column_type {
+                CarburetorColumnType::Id => quote!(#column_name: row_id.clone()),
+                _ => quote!(#column_name: None),
+            }
+        });
+
+        // Only data columns synced from the backend can have staged values (same filter as
+        // check_dirty_columns).
+        let apply_columns = self.table.columns.iter().filter_map(|x| {
+            match (&x.column_type, &x.column_scope) {
+                (CarburetorColumnType::Data, ColumnScope::Both | ColumnScope::ModOnBackendOnly) => {
+                    let column_name = &x.ident;
+                    let column_name_str = x.ident.to_string();
+                    let ty = AsModelType(&x.diesel_type);
+                    let assignment = match x.column_scope {
+                        ColumnScope::ModOnBackendOnly => {
+                            quote!(update_model.#column_name = Some(Some(converted)))
+                        }
+                        _ => quote!(update_model.#column_name = Some(converted)),
+                    };
+                    Some(quote! {
+                        #column_name_str => {
+                            let converted = carburetor::serde_json::from_value::<#ty>(value.clone())
+                                .map_err(|e| carburetor::error::Error::Unhandled {
+                                    message: format!(
+                                        "Failed to convert staged value of column `{}` into its model type",
+                                        #column_name_str,
+                                    ),
+                                    source: e.into(),
+                                })?;
+                            #assignment;
+                            metadata.unknown_data.remove(&column);
+                            Ok(true)
+                        }
+                    })
+                }
+                _ => None,
+            }
+        });
+
+        tokens.extend(quote! {
+            fn #function_name(conn: &mut diesel::SqliteConnection) -> carburetor::error::Result<()> {
+                use diesel::prelude::*;
+                use carburetor::helpers::client_sync_metadata::ClientSyncMetadata;
+
+                let rows = #table_name::table
+                    .select((
+                        #table_name::#id_column_name,
+                        #table_name::#column_sync_metadata_column_name,
+                    ))
+                    .filter(diesel::dsl::sql::<diesel::sql_types::Bool>(&format!(
+                        "json_extract({}, '$.\".unknown_data\"') IS NOT NULL",
+                        #metadata_column_str
+                    )))
+                    .load::<(#id_type, carburetor::serde_json::Value)>(conn)?;
+
+                for (row_id, metadata_value) in rows {
+                    let mut metadata: ClientSyncMetadata<#table_metadata_model_name> =
+                        carburetor::serde_json::from_value(metadata_value).unwrap_or_default();
+                    let mut update_model = #changeset_model_name {
+                        #(#changeset_fields,)*
+                    };
+
+                    // Snapshot the keys first: removing entries while iterating would
+                    // borrow `unknown_data` mutably and immutably at the same time.
+                    // Arms return whether the column was applied; the fold ORs them
+                    // into a single "any applied" result.
+                    let applied = metadata
+                        .unknown_data
+                        .keys()
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .into_iter()
+                        .try_fold(false, |applied, column| -> carburetor::error::Result<bool> {
+                            let value = &metadata.unknown_data[&column];
+                            match column.as_str() {
+                                #(#apply_columns)*
+                                _ => Ok(applied),
+                            }
+                        })?;
+                    if applied {
+                        update_model.#column_sync_metadata_column_name =
+                            Some(carburetor::serde_json::Value::from(metadata));
+                        diesel::update(#table_name::table.find(&row_id))
+                            .set(update_model)
+                            .execute(conn)?;
+                    }
+                }
+                Ok(())
+            }
+        });
+    }
+}
+
 pub(crate) fn generate_store_download_response_function(
     tokens: &mut TokenStream,
     sync_group: &CarburetorSyncGroup,
@@ -199,6 +324,39 @@ pub(crate) fn generate_store_download_response_function(
             #(#sync_table_functions_decl)*
             let mut conn = carburetor::helpers::get_connection()?;
             #(#call_sync_table_function)*
+            Ok(())
+        }
+    });
+}
+
+pub(crate) fn generate_apply_backfill_function(
+    tokens: &mut TokenStream,
+    sync_group: &CarburetorSyncGroup,
+) {
+    let function_name = Ident::new("apply_backfill", sync_group.name.span());
+    let backfill_table_functions_decl = sync_group
+        .table_configs
+        .iter()
+        .map(|x| AsBackfillTableFunction {
+            table: &x.reference_table,
+        })
+        .collect::<Vec<_>>();
+    let call_backfill_table_function = backfill_table_functions_decl
+        .iter()
+        .map(|x| {
+            let call_name = x.get_function_name();
+            quote! { #call_name(&mut conn)?; }
+        })
+        .collect::<Vec<_>>();
+
+    tokens.extend(quote! {
+        /// Applies staged unknown data (see `ClientSyncMetadata::unknown_data`) whose columns now
+        /// exist in the local schema, removing them from staging. Entries whose columns still don't
+        /// exist locally are retained for a future attempt. Works offline.
+        pub fn #function_name() -> carburetor::error::Result<()> {
+            #(#backfill_table_functions_decl)*
+            let mut conn = carburetor::helpers::get_connection()?;
+            #(#call_backfill_table_function)*
             Ok(())
         }
     });

@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::{Map, Value, from_value, to_value};
@@ -27,12 +25,6 @@ pub struct Metadata {
     pub column_last_synced_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
-pub struct UnknownMetadata {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<Value>,
-}
-
 fn is_empty<T: Serialize>(value: &T) -> bool {
     match to_value(value) {
         Ok(Value::Object(map)) => map.is_empty(),
@@ -49,8 +41,12 @@ pub struct ClientSyncMetadata<T> {
     pub data: Option<T>,
 
     // Note: unknown data is mainly for DB migration use to recover data in the future
-    #[serde(flatten)]
-    pub unknown_data: HashMap<String, UnknownMetadata>,
+    #[serde(
+        default,
+        rename = ".unknown_data",
+        skip_serializing_if = "Map::is_empty"
+    )]
+    pub unknown_data: Map<String, Value>,
 }
 
 impl<T> ClientSyncMetadata<T> {
@@ -58,12 +54,7 @@ impl<T> ClientSyncMetadata<T> {
     /// the same row overwrites the previously staged value (latest server value wins).
     pub fn stage_unknown_data(&mut self, unknown_data: &Map<String, Value>) {
         for (column, value) in unknown_data {
-            self.unknown_data.insert(
-                column.clone(),
-                UnknownMetadata {
-                    data: Some(value.clone()),
-                },
-            );
+            self.unknown_data.insert(column.clone(), value.clone());
         }
     }
 }
@@ -130,11 +121,23 @@ mod tests {
     }
 
     #[test]
-    fn test_empty_unknown_data() {
-        let value: Value = json!({"unknown": {}});
+    fn test_empty_unknown_data_dropped_on_roundtrip() {
+        let metadata: ClientSyncMetadata<User> =
+            serde_json::from_value(json!({".unknown_data": {}})).unwrap();
+
+        assert_eq!(Value::from(metadata), json!({}));
+    }
+
+    #[test]
+    fn test_staged_data_survives_metadata_roundtrip() {
+        // Staged entries are persisted in the metadata JSON column; they must
+        // survive a serialize -> deserialize roundtrip intact.
+        let value: Value = json!({".unknown_data": {"name": "Alice", "future_column": "staged"}});
         let metadata: ClientSyncMetadata<User> = value.clone().into();
 
-        assert_eq!(value, Value::from(metadata));
+        let roundtripped: ClientSyncMetadata<User> = Value::from(metadata).into();
+
+        assert_eq!(value, Value::from(roundtripped));
     }
 
     #[test]
@@ -148,10 +151,7 @@ mod tests {
         new_data.insert("new_column".to_string(), json!("new value"));
         metadata.stage_unknown_data(&new_data);
 
-        assert_eq!(
-            metadata.unknown_data["new_column"].data,
-            Some(json!("new value"))
-        );
+        assert_eq!(metadata.unknown_data["new_column"], json!("new value"));
         assert_eq!(metadata.unknown_data.len(), 1);
     }
 }

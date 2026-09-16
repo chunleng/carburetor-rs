@@ -62,7 +62,9 @@ pub(crate) fn generate_carburetor_sync_config(
                     models::generate_local_operation_models,
                 },
                 models::generate_client_models,
-                sync_local_db::functions::generate_store_download_response_function,
+                sync_local_db::functions::{
+                    generate_apply_backfill_function, generate_store_download_response_function,
+                },
             };
 
             x.table_configs.iter().for_each(|config| {
@@ -72,6 +74,7 @@ pub(crate) fn generate_carburetor_sync_config(
 
             generate_client_models(&mut mod_tokens, &x);
             generate_store_download_response_function(&mut mod_tokens, &x);
+            generate_apply_backfill_function(&mut mod_tokens, &x);
 
             generate_local_operation_functions(&mut mod_tokens, &x);
             generate_local_operation_models(&mut mod_tokens, &x);
