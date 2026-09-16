@@ -112,10 +112,16 @@ impl<'a> ToTokens for AsSyncTableToLocalDbFunction<'a> {
                                     .#last_synced_at_column_name
                                     .is_some_and(|x| x > existing_item.#last_synced_at_column_name)
                                 {
-                                    let existing_metadata: ClientSyncMetadata<#table_metadata_model_name>;
+                                    let mut existing_metadata: ClientSyncMetadata<#table_metadata_model_name>;
                                     existing_metadata = from_value(existing_item.#column_sync_metadata_column_name).unwrap_or_default();
 
                                     #(#check_dirty_columns)*
+
+                                    if !update_item.unknown_data.is_empty() {
+                                        existing_metadata.stage_unknown_data(&update_item.unknown_data);
+                                        update_model.#column_sync_metadata_column_name =
+                                            Some(carburetor::serde_json::Value::from(existing_metadata));
+                                    }
 
                                     diesel::update(table.find(existing_item.#id_column_name))
                                         .set(update_model)
@@ -123,8 +129,16 @@ impl<'a> ToTokens for AsSyncTableToLocalDbFunction<'a> {
                                 }
                             }
                             None => {
+                                let mut insert_model = #insert_model_name::from(update_item.clone());
+                                if !update_item.unknown_data.is_empty() {
+                                    let mut metadata: ClientSyncMetadata<#table_metadata_model_name> =
+                                        ClientSyncMetadata::default();
+                                    metadata.stage_unknown_data(&update_item.unknown_data);
+                                    insert_model.#column_sync_metadata_column_name =
+                                        carburetor::serde_json::Value::from(metadata);
+                                }
                                 diesel::insert_into(table)
-                                    .values(#insert_model_name::from(update_item.clone()))
+                                    .values(insert_model)
                                     .execute(conn)?;
                             }
                         }

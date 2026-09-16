@@ -207,6 +207,10 @@ impl<'a> ToTokens for AsDownloadResponseTableModel<'a> {
         let diesel_table;
         let from_model_to_new_table_model;
         let from_model_to_update_table_model;
+        // Captures columns that exist on the backend but not in the client's
+        // schema (e.g. backend upgraded before the client), so their values are
+        // not lost on download.
+        let unknown_data_field;
         match get_target_type() {
             TargetType::Backend => {
                 attribute = quote! {
@@ -219,6 +223,7 @@ impl<'a> ToTokens for AsDownloadResponseTableModel<'a> {
                 .to_token_stream();
                 from_model_to_new_table_model = quote! {};
                 from_model_to_update_table_model = quote! {};
+                unknown_data_field = quote! {};
             }
             TargetType::Client => {
                 attribute = quote! {
@@ -229,6 +234,10 @@ impl<'a> ToTokens for AsDownloadResponseTableModel<'a> {
                     client::AsFromModelToNewTableModel { model_name, table }.to_token_stream();
                 from_model_to_update_table_model =
                     client::AsFromModelToUpdateTableModel { model_name, table }.to_token_stream();
+                unknown_data_field = quote! {
+                    #[serde(flatten)]
+                    pub unknown_data: carburetor::serde_json::Map<String, carburetor::serde_json::Value>
+                };
             }
         }
 
@@ -237,6 +246,7 @@ impl<'a> ToTokens for AsDownloadResponseTableModel<'a> {
             #diesel_table
             pub struct #model_name {
                 #(#columns,)*
+                #unknown_data_field
             }
 
             #from_model_to_new_table_model

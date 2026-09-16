@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use serde_json::{Value, from_value, to_value};
+use serde_json::{Map, Value, from_value, to_value};
 
 #[derive(Debug, Clone)]
 pub enum DirtyFlag {
@@ -51,6 +51,21 @@ pub struct ClientSyncMetadata<T> {
     // Note: unknown data is mainly for DB migration use to recover data in the future
     #[serde(flatten)]
     pub unknown_data: HashMap<String, UnknownMetadata>,
+}
+
+impl<T> ClientSyncMetadata<T> {
+    /// Stages values of columns unknown to the client schema, keyed by column name. Re-downloading
+    /// the same row overwrites the previously staged value (latest server value wins).
+    pub fn stage_unknown_data(&mut self, unknown_data: &Map<String, Value>) {
+        for (column, value) in unknown_data {
+            self.unknown_data.insert(
+                column.clone(),
+                UnknownMetadata {
+                    data: Some(value.clone()),
+                },
+            );
+        }
+    }
 }
 
 impl<T: DeserializeOwned> From<Value> for ClientSyncMetadata<T> {
@@ -120,5 +135,23 @@ mod tests {
         let metadata: ClientSyncMetadata<User> = value.clone().into();
 
         assert_eq!(value, Value::from(metadata));
+    }
+
+    #[test]
+    fn test_stage_unknown_data_overwrites_previous_value() {
+        let mut metadata: ClientSyncMetadata<User> = ClientSyncMetadata::default();
+        let mut old_data = Map::new();
+        old_data.insert("new_column".to_string(), json!("old value"));
+        metadata.stage_unknown_data(&old_data);
+
+        let mut new_data = Map::new();
+        new_data.insert("new_column".to_string(), json!("new value"));
+        metadata.stage_unknown_data(&new_data);
+
+        assert_eq!(
+            metadata.unknown_data["new_column"].data,
+            Some(json!("new value"))
+        );
+        assert_eq!(metadata.unknown_data.len(), 1);
     }
 }
