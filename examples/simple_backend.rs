@@ -16,7 +16,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         database_url,
     });
 
-    schema::run_migrations(&mut connection)?;
+    let changed = schema::run_migrations(&mut connection)?;
+    println!("Migrations ran; schema changed: {changed}");
 
     let id = "USER1".to_string();
 

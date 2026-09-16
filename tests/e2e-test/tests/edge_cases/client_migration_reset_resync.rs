@@ -96,7 +96,9 @@ async fn test_reset_dropped_offsets_cause_full_resync() {
     );
 
     // Re-migration succeeds on the fresh schema.
-    all_clients::run_migrations(&mut conn).expect("re-migration should succeed on fresh schema");
+    let changed = all_clients::run_migrations(&mut conn)
+        .expect("re-migration should succeed on fresh schema");
+    assert!(!changed, "reset already recreated the schema");
 
     // Offsets were dropped with the reset, so the download returns every
     // backend row again (full re-sync, not incremental).

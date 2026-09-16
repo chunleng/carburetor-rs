@@ -92,6 +92,10 @@ async fn test_clean_migration_creates_all_tables() {
     assert_eq!(offsets.len(), 2);
     assert_column(&offsets, "table_name", "TEXT", true, true, None);
     assert_column(&offsets, "cutoff_at", "TIMESTAMPTZ", true, false, None);
+
+    // The schema is already up to date, so a rerun should report no change.
+    let changed = sample_test_core::schema::run_migrations(&mut conn).unwrap();
+    assert!(!changed, "no-change rerun should report no schema change");
 }
 
 /// Recreate `users` with only NOT NULL no-default columns, omitting every
@@ -120,7 +124,8 @@ async fn test_existing_table_missing_columns_gets_added() {
     let before = get_columns(&mut conn, "users");
     assert_eq!(before.len(), 6, "table should start with 6 columns");
 
-    all_clients::run_migrations(&mut conn).unwrap();
+    let changed = all_clients::run_migrations(&mut conn).unwrap();
+    assert!(changed, "adding columns should report a schema change");
 
     let after = get_columns(&mut conn, "users");
     assert_eq!(
@@ -198,7 +203,8 @@ async fn test_multiple_columns_relaxed_in_single_rebuild() {
     assert_column(&before, "first_name", "TEXT", true, false, None);
     assert_column(&before, "nickname", "TEXT", true, false, None);
 
-    all_clients::run_migrations(&mut conn).unwrap();
+    let changed = all_clients::run_migrations(&mut conn).unwrap();
+    assert!(changed, "relaxing NOT NULL should report a schema change");
 
     let after = get_columns(&mut conn, "users");
     assert_eq!(after.len(), 12, "table should still have 12 columns");
