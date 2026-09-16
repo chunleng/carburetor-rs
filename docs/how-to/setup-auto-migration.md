@@ -54,8 +54,10 @@ The generated signature is:
 
 ```rust
 pub fn run_migrations(conn: &mut diesel::PgConnection)
-    -> Result<(), carburetor::error::Error>
+    -> Result<bool, carburetor::error::Error>
 ```
+
+It returns `Ok(true)` if the schema changed, `Ok(false)` otherwise.
 
 ### 3. Make the migration feature work for the client
 
@@ -75,7 +77,7 @@ let mut connection =
 
 // `user` is a sync group; its `run_migrations` lives in its module.
 match user::run_migrations(&mut connection) {
-    Ok(()) => {}
+    Ok(changed) => println!("Migrations ran. schema changed: {changed}"),
     Err(Error::DatabaseWiped { source }) => {
         // The local database was unrecoverably out of sync with the declared
         // schema, so it was wiped and recreated. Inform the user that local
@@ -94,8 +96,12 @@ The generated signature is scoped to the group's module:
 
 ```rust
 pub fn run_migrations(conn: &mut diesel::SqliteConnection)
-    -> Result<(), carburetor::error::Error>
+    -> Result<bool, carburetor::error::Error>
 ```
+
+As on the backend, it returns `Ok(true)` if the schema changed, `Ok(false)`
+otherwise. The error behavior is different: on unrecoverable schema drift the
+local database is reset (see the match example above).
 
 ## Limitations
 
