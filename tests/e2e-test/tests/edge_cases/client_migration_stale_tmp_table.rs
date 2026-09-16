@@ -60,8 +60,9 @@ async fn test_stale_tmp_table_does_not_block_rebuild() {
         .execute(&mut conn)
         .unwrap();
 
-    all_clients::run_migrations(&mut conn)
+    let changed = all_clients::run_migrations(&mut conn)
         .expect("migration should succeed despite stale _carburetor_tmp table");
+    assert!(changed, "rebuild should report a schema change");
 
     // The stale temp table should be gone (renamed to users)
     let tmp_columns = get_columns(&mut conn, "_carburetor_tmp");

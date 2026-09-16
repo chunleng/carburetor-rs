@@ -151,7 +151,7 @@ async fn test_add_missing_column_with_sql_default() {
         .unwrap();
 
     let result = backend.test_helper_rerun_migrations(ctx()).await.unwrap();
-    assert!(result.is_ok());
+    assert_eq!(result, Ok(true), "adding a column should report a change");
 
     let columns: Vec<ColumnMeta> = backend
         .test_helper_get_table_columns(ctx(), "users".to_string())
@@ -179,7 +179,7 @@ async fn test_add_nullable_column_without_default() {
         .unwrap();
 
     let result = backend.test_helper_rerun_migrations(ctx()).await.unwrap();
-    assert!(result.is_ok());
+    assert_eq!(result, Ok(true), "adding a column should report a change");
 
     let columns: Vec<ColumnMeta> = backend
         .test_helper_get_table_columns(ctx(), "users".to_string())
@@ -206,7 +206,7 @@ async fn test_extra_nullable_column_allowed() {
         .unwrap();
 
     let result = backend.test_helper_rerun_migrations(ctx()).await.unwrap();
-    assert!(result.is_ok());
+    assert_eq!(result, Ok(false), "extra column means no schema change");
 }
 
 #[tokio::test]
@@ -224,7 +224,7 @@ async fn test_extra_non_null_column_with_default_allowed() {
     .unwrap();
 
     let result = backend.test_helper_rerun_migrations(ctx()).await.unwrap();
-    assert!(result.is_ok());
+    assert_eq!(result, Ok(false), "extra column means no schema change");
 }
 
 #[tokio::test]
@@ -247,7 +247,7 @@ async fn test_migration_ignores_shadow_table_in_other_schema() {
         .unwrap();
 
     let result = backend.test_helper_rerun_migrations(ctx()).await.unwrap();
-    assert!(result.is_ok());
+    assert_eq!(result, Ok(false), "shadow table means no schema change");
 }
 
 #[tokio::test]
@@ -265,7 +265,11 @@ async fn test_make_existing_column_nullable() {
         .unwrap();
 
     let result = backend.test_helper_rerun_migrations(ctx()).await.unwrap();
-    assert!(result.is_ok());
+    assert_eq!(
+        result,
+        Ok(true),
+        "relaxing NOT NULL should report a schema change"
+    );
 
     let columns: Vec<ColumnMeta> = backend
         .test_helper_get_table_columns(ctx(), "users".to_string())

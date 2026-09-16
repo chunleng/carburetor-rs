@@ -124,8 +124,9 @@ pub(crate) fn generate_run_migrations(tokens: &mut TokenStream, tables: &[Rc<Car
                     let exists = carburetor::helpers::migration::check_table_exists(conn, #table_name_str)?;
                     if !exists {
                         carburetor::helpers::migration::create_table(conn, #table_name_str, &columns)?;
+                        true
                     } else {
-                        carburetor::helpers::migration::alter_table(conn, #table_name_str, &columns)?;
+                        carburetor::helpers::migration::alter_table(conn, #table_name_str, &columns)?
                     }
                 }
             }
@@ -156,6 +157,9 @@ pub(crate) fn generate_run_migrations(tokens: &mut TokenStream, tables: &[Rc<Car
                     let exists = carburetor::helpers::migration::check_table_exists(conn, "carburetor_offsets")?;
                     if !exists {
                         carburetor::helpers::migration::create_table(conn, "carburetor_offsets", &columns)?;
+                        true
+                    } else {
+                        false
                     }
                 }
             },
@@ -164,17 +168,18 @@ pub(crate) fn generate_run_migrations(tokens: &mut TokenStream, tables: &[Rc<Car
 
     if is_client {
         tokens.extend(quote! {
-            pub fn run_migrations(conn: &mut #conn_type) -> Result<(), carburetor::error::Error> {
-                fn migrate_tables(conn: &mut #conn_type) -> Result<(), carburetor::error::Error> {
+            pub fn run_migrations(conn: &mut #conn_type) -> Result<bool, carburetor::error::Error> {
+                fn migrate_tables(conn: &mut #conn_type) -> Result<bool, carburetor::error::Error> {
                     use diesel::Connection;
                     conn.transaction(|conn| {
-                        #(#table_migrations)*
-                        Ok(())
+                        // `|` (not `||`) folds the per-table changed flags without
+                        // short-circuiting, so every table's migration still runs.
+                        Ok(#(#table_migrations)|*)
                     })
                 }
 
                 match migrate_tables(conn) {
-                    Ok(()) => Ok(()),
+                    Ok(changed) => Ok(changed),
                     Err(e @ carburetor::error::Error::Migration(_)) => {
                         // Unrecoverable schema drift: wipe the whole local DB (all user tables) and
                         // recreate the schema from scratch.
@@ -194,11 +199,12 @@ pub(crate) fn generate_run_migrations(tokens: &mut TokenStream, tables: &[Rc<Car
         });
     } else {
         tokens.extend(quote! {
-            pub fn run_migrations(conn: &mut #conn_type) -> Result<(), carburetor::error::Error> {
+            pub fn run_migrations(conn: &mut #conn_type) -> Result<bool, carburetor::error::Error> {
                 use diesel::Connection;
                 conn.transaction(|conn| {
-                    #(#table_migrations)*
-                    Ok(())
+                    // `|` (not `||`) folds the per-table changed flags without
+                    // short-circuiting, so every table's migration still runs.
+                    Ok(#(#table_migrations)|*)
                 }).map_err(|e|
                     carburetor::error::Error::Unhandled {
                         message: "Migration error".to_string(),

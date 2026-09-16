@@ -98,7 +98,7 @@ fn assert_declared_messages_schema(conn: &mut diesel::SqliteConnection) {
 /// `Error::DatabaseWiped` so callers can detect that local data was lost,
 /// with the original migration error preserved as the source.
 fn assert_wiped_migration_error(
-    result: Result<(), carburetor::error::Error>,
+    result: Result<bool, carburetor::error::Error>,
     expected_in_source: &[&str],
 ) {
     let err = result.unwrap_err();

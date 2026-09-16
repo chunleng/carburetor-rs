@@ -25,7 +25,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     initialize_carburetor_global_config(CarburetorGlobalConfig { database_path });
 
     match schema::all_clients::run_migrations(&mut connection) {
-        Ok(()) => {}
+        Ok(changed) => println!("Migrations ran; schema changed: {changed}"),
         Err(carburetor::error::Error::DatabaseWiped { source }) => {
             // The local database was unrecoverably out of sync with the declared
             // schema, so it was wiped and recreated. Inform the user that local

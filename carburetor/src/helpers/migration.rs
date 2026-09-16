@@ -745,11 +745,16 @@ pub fn validate_missing_have_defaults(
     Ok(())
 }
 
+/// Alters an existing table to match the declared schema, reporting whether
+/// the schema changed.
+///
+/// Returns `Ok(true)` when columns were added or NOT NULL constraints were
+/// dropped, `Ok(false)` when the table already matched the declared schema.
 pub fn alter_table(
     conn: &mut MigrationConn,
     table_name: &str,
     declared_columns: &[ColumnDef],
-) -> crate::error::Result<()> {
+) -> crate::error::Result<bool> {
     let existing = introspect_columns(conn, table_name)?;
 
     validate_existing_columns(&existing, declared_columns, table_name)?;
@@ -776,7 +781,7 @@ pub fn alter_table(
         drop_not_null(conn, table_name, &needs_drop_not_null)?;
     }
 
-    Ok(())
+    Ok(!missing.is_empty() || !needs_drop_not_null.is_empty())
 }
 
 #[cfg(for_backend)]
