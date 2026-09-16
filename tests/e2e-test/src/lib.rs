@@ -99,7 +99,7 @@ pub enum TestSyncGroup {
 }
 
 impl TestSyncGroup {
-    fn run_migrations(self, conn: &mut SqliteConnection) -> Result<(), carburetor::error::Error> {
+    fn run_migrations(self, conn: &mut SqliteConnection) -> Result<bool, carburetor::error::Error> {
         use sample_test_core::schema;
         match self {
             TestSyncGroup::AllClients => schema::all_clients::run_migrations(conn),

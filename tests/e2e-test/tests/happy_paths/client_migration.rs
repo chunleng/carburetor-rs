@@ -94,7 +94,7 @@ async fn test_clean_migration_creates_all_tables() {
     assert_column(&offsets, "cutoff_at", "TIMESTAMPTZ", true, false, None);
 
     // The schema is already up to date, so a rerun should report no change.
-    let changed = sample_test_core::schema::run_migrations(&mut conn).unwrap();
+    let changed = all_clients::run_migrations(&mut conn).unwrap();
     assert!(!changed, "no-change rerun should report no schema change");
 }
 
