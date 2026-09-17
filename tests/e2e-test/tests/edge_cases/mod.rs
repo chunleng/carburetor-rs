@@ -1,3 +1,4 @@
+pub mod backfill_type_mismatch;
 pub mod backfill_version_skew;
 pub mod client_migration_reset_resync;
 pub mod client_migration_stale_tmp_table;
