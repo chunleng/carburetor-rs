@@ -1,6 +1,14 @@
+use carburetor::helpers::client_sync_metadata::ClientSyncMetadata;
+use carburetor::serde_json::Value;
 use diesel::{QueryableByName, RunQueryDsl};
-use e2e_test::{TestSyncGroup, get_clean_test_client_db};
-use sample_test_core::schema::all_clients;
+use e2e_test::{
+    TestSyncGroup, get_clean_test_client_db,
+    utils::{
+        database_util::retrieve_stored_user,
+        fixture_util::{build_download_response_with_unknown_column, get_user_staged_value},
+    },
+};
+use sample_test_core::schema::{all_clients, user_only};
 
 #[derive(Debug, QueryableByName)]
 struct PragmaColumnInfo {
@@ -238,4 +246,53 @@ async fn test_user_only_migration_creates_only_user_tables() {
         get_columns(&mut conn, "messages").is_empty(),
         "messages is not in user_only sync group and must not be created"
     );
+}
+
+#[tokio::test]
+async fn test_apply_backfill_materializes_staged_value() {
+    let db = get_clean_test_client_db(TestSyncGroup::UserOnly);
+    let mut conn = db.get_connection();
+
+    // A pre-upgrade client staged the backend's nickname value.
+    user_only::store_download_response(build_download_response_with_unknown_column(
+        "u1",
+        &[("nickname", "staged nickname")],
+        0,
+    ))
+    .unwrap();
+    assert_eq!(
+        get_user_staged_value(&retrieve_stored_user(&mut conn, "u1"), "nickname"),
+        Value::String("staged nickname".to_string())
+    );
+
+    // The client has since upgraded: nickname is now a known column, so
+    // apply_backfill materializes the staged value. No backend is started:
+    // backfill works offline.
+    user_only::apply_backfill().unwrap();
+
+    let user = retrieve_stored_user(&mut conn, "u1");
+    assert_eq!(user.nickname, Some("staged nickname".to_string()));
+    // The staged entry is removed once applied.
+    assert_eq!(get_user_staged_value(&user, "nickname"), Value::Null);
+
+    // The applied column stays metadata-clean: no dirty_at (never uploaded),
+    // no column_last_synced_at (later server changes still overwrite).
+    let metadata: ClientSyncMetadata<user_only::UserSyncMetadata> =
+        user.column_sync_metadata.clone().into();
+    assert!(
+        metadata
+            .data
+            .as_ref()
+            .and_then(|data| data.nickname.as_ref())
+            .is_none(),
+        "nickname should have no Metadata entry after backfill"
+    );
+    // The row came from the server and was never locally edited.
+    assert!(user.dirty_flag.is_none());
+
+    // Idempotent: rerunning changes nothing.
+    user_only::apply_backfill().unwrap();
+    let user = retrieve_stored_user(&mut conn, "u1");
+    assert_eq!(user.nickname, Some("staged nickname".to_string()));
+    assert_eq!(get_user_staged_value(&user, "nickname"), Value::Null);
 }

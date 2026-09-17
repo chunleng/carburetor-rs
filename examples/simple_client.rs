@@ -36,6 +36,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => return Err(e.into()),
     }
 
+    schema::all_clients::apply_backfill()?;
+
     println!("Check download sync offsets (Null for all):");
     dbg!(all_clients::retrieve_download_request()?);
 
@@ -51,6 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     joined_on: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
                     last_synced_at: get_utc_now(),
                     is_deleted: false,
+                    unknown_data: carburetor::serde_json::Map::new(),
                 },
             )],
         },
@@ -76,6 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     joined_on: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
                     last_synced_at: get_utc_now(),
                     is_deleted: false,
+                    unknown_data: carburetor::serde_json::Map::new(),
                 },
             )],
         },
@@ -98,6 +102,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     joined_on: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
                     last_synced_at: get_utc_now() - Duration::from_hours(2),
                     is_deleted: false,
+                    unknown_data: carburetor::serde_json::Map::new(),
                 },
             )],
         },
@@ -146,6 +151,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     joined_on: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
                     last_synced_at: get_utc_now(),
                     is_deleted: false,
+                    unknown_data: carburetor::serde_json::Map::new(),
                 },
             )],
         },
@@ -192,6 +198,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     joined_on: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
                     last_synced_at: get_utc_now(),
                     is_deleted: false,
+                    unknown_data: carburetor::serde_json::Map::new(),
                 },
             )],
         },

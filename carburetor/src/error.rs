@@ -29,4 +29,20 @@ pub enum Error {
         #[source]
         source: anyhow::Error,
     },
+
+    #[error(
+        "Staged values do not match the local column types. The tables have been reset: {details}",
+        details = errors
+            .iter()
+            .map(|e| format!("`{}`: {}", e.table_name, e.source))
+            .collect::<Vec<_>>()
+            .join(", ")
+    )]
+    ResetTable { errors: Vec<ResetTableEntry> },
+}
+
+#[derive(Debug)]
+pub struct ResetTableEntry {
+    pub table_name: String,
+    pub source: Box<dyn std::error::Error + Send + Sync + 'static>,
 }

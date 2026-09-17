@@ -12,6 +12,8 @@ use tempfile::TempDir;
 
 use sample_test_core::backend_service::TestBackendClient;
 
+pub mod utils;
+
 static TEST_CLIENT_DB: OnceLock<Mutex<TestClientDatabase>> = OnceLock::new();
 
 pub struct TestBackendHandle {

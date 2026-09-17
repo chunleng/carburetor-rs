@@ -51,6 +51,17 @@ pub fn upsert_offset(
     Ok(())
 }
 
+pub fn delete_offset(conn: &mut diesel::SqliteConnection, table_name: &str) -> Result<()> {
+    diesel::delete(carburetor_offsets::table.find(table_name))
+        .execute(conn)
+        .map_err(|e| Error::Unhandled {
+            message: format!("Failed to delete offset for table '{}'", table_name),
+            source: e.into(),
+        })?;
+
+    Ok(())
+}
+
 pub fn retrieve_offsets(
     conn: &mut diesel::SqliteConnection,
 ) -> Result<HashMap<String, DateTime<Utc>>> {

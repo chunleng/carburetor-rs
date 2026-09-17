@@ -103,8 +103,44 @@ As on the backend, it returns `Ok(true)` if the schema changed, `Ok(false)`
 otherwise. The error behavior is different: on unrecoverable schema drift the
 local database is reset (see the match example above).
 
+### 4. Backfill staged values after a client schema change
+
+While a client runs an older schema, downloads can carry columns the client
+does not have yet. Carburetor stages those values in the local database instead
+of dropping them. After a migration adds the missing columns, call the sync
+group's `apply_backfill` to move the staged values into them:
+
+```rust
+match user::apply_backfill() {
+    Ok(()) => {}
+    Err(Error::ResetTable { errors }) => {
+        eprintln!("Tables sync offset is resetted after failed backfill: {errors:?}");
+    }
+    Err(err) => return Err(err),
+}
+```
+
+The generated signature is scoped to the group's module:
+
+```rust
+pub fn apply_backfill() -> carburetor::error::Result<()>
+```
+
+Calling it is safe at any time: it is a no-op when nothing is staged, works
+offline, and leaves staged values whose columns still do not exist in place for
+a later attempt.
+
 ## Limitations
 
 Auto-migration only applies to a subset of operation patterns. See the
 [migration guide](../reference/migration-patterns.md) (TODO) for which patterns
 are covered and how to apply the rest.
+
+### Handle interruption between migration and backfill
+
+You must handle the case where the program is interrupted after the client
+migration ran but before backfill: on the next run `run_migrations` returns
+`Ok(false)`, so gating backfill on the migration result alone would skip it and
+leave staged values stranded. Instead, persist a `needs_backfill` flag: set it
+when `run_migrations` reports a schema change, clear it after `apply_backfill`
+succeeds, and gate the backfill call on the flag.
