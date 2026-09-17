@@ -62,6 +62,13 @@ With the `migration` feature enabled, each group also generates a
 `run_migrations` function on the client, inside the group's module. It covers
 only the tables in that group, plus `carburetor_offsets`.
 
+Every client sync group also generates an `apply_backfill` function in the
+group's module, which applies staged unknown data
+(`#[client_column_sync_metadata]` `.unknown_data`) into the data columns they
+name. See
+[client-schema-version-skew](../../explanation/client-schema-version-skew.md)
+for how staging and backfill fit together.
+
 ## Usage notes
 
 - Declare every table in the `tables` block before referencing it in a group;

@@ -93,7 +93,7 @@ declared explicitly.
 | `#[last_synced_at]` | `Timestamptz` | `last_synced_at` | Backend only | Server-side update timestamp; synced down to clients, never modified by the client |
 | `#[is_deleted]` | `Bool` | `is_deleted` | Backend and client | Soft-delete flag. Records are never physically deleted; see [soft deletion](../../explanation/soft-deletion.md) |
 | `#[dirty_flag]` | `Nullable<Text>` | `dirty_flag` | Client only | Dirty marker recording why a row is dirty. Default value `None` |
-| `#[client_column_sync_metadata]` | `Jsonb` | `column_sync_metadata` | Client only | Per-column sync metadata used for column-level conflict resolution |
+| `#[client_column_sync_metadata]` | `Jsonb` | `column_sync_metadata` | Client only | Per-column sync metadata used for column-level conflict resolution. Stages unknown column data; see [client schema version skew](../../explanation/client-schema-version-skew.md) |
 
 ## Effect on generated code
 

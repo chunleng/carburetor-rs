@@ -394,6 +394,8 @@ If everything is configured correctly:
 
 ## Next steps
 
-- Enable automatic schema migration: [set up auto-migration](../how-to/setup-auto-migration.md)
+- Upgrade your schema without losing data: [auto-migration and backfill](../how-to/setup-auto-migration.md)
+  - Replace your handwritten `CREATE TABLE` by auto-migration feature.
+  - Handles situation where old client version silently drop new version data synced from the server with `apply_backfill` function
 - Learn the full `carburetor_sync_config!` syntax: [table reference](../reference/sync-config/table.md) and [sync-group reference](../reference/sync-config/sync-group.md)
 - Understand the design: [why sync groups exist](../explanation/sync-groups.md)
