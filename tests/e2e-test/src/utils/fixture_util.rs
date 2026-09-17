@@ -7,7 +7,7 @@ use carburetor::serde_json::{Map, Value};
 use sample_test_core::schema::user_only;
 
 /// Builds a download response containing a single user row.
-fn build_dummy_download_response(
+pub fn build_dummy_download_response(
     id: &str,
     last_synced_at_offset_secs: u64,
 ) -> user_only::DownloadResponse {

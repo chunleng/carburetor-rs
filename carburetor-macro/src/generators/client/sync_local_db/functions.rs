@@ -110,7 +110,7 @@ impl<'a> ToTokens for AsSyncTableToLocalDbFunction<'a> {
                                 let mut update_model = #changeset_model_name::from(update_item.clone());
                                 if update_model
                                     .#last_synced_at_column_name
-                                    .is_some_and(|x| x > existing_item.#last_synced_at_column_name)
+                                    .is_some_and(|x| x >= existing_item.#last_synced_at_column_name)
                                 {
                                     let mut existing_metadata: ClientSyncMetadata<#table_metadata_model_name>;
                                     existing_metadata = from_value(existing_item.#column_sync_metadata_column_name).unwrap_or_default();
