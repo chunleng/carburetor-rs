@@ -30,8 +30,8 @@ pub(crate) fn generate_carburetor_sync_config(
 ) {
     if get_target_type() == TargetType::Backend {
         sync_config.tables.iter().for_each(|x| {
-            generate_diesel_table_schema(tokens, &x);
-            generate_diesel_model(tokens, &x);
+            generate_diesel_table_schema(tokens, x);
+            generate_diesel_model(tokens, x);
         });
     }
 
@@ -42,12 +42,12 @@ pub(crate) fn generate_carburetor_sync_config(
 
     sync_config.sync_groups.iter().for_each(|x| {
         let mut mod_tokens = TokenStream::new();
-        generate_download_sync_group_models(&mut mod_tokens, &x);
+        generate_download_sync_group_models(&mut mod_tokens, x);
         generate_upload_sync_group_models(&mut mod_tokens, x);
         generate_upload_sync_group_functions(&mut mod_tokens, x);
         crate::generators::download::functions::generate_download_sync_group_functions(
             &mut mod_tokens,
-            &x,
+            x,
         );
 
         if get_target_type() == TargetType::Backend {
@@ -72,12 +72,12 @@ pub(crate) fn generate_carburetor_sync_config(
                 generate_diesel_model(&mut mod_tokens, &config.reference_table);
             });
 
-            generate_client_models(&mut mod_tokens, &x);
-            generate_store_download_response_function(&mut mod_tokens, &x);
-            generate_apply_backfill_function(&mut mod_tokens, &x);
+            generate_client_models(&mut mod_tokens, x);
+            generate_store_download_response_function(&mut mod_tokens, x);
+            generate_apply_backfill_function(&mut mod_tokens, x);
 
-            generate_local_operation_functions(&mut mod_tokens, &x);
-            generate_local_operation_models(&mut mod_tokens, &x);
+            generate_local_operation_functions(&mut mod_tokens, x);
+            generate_local_operation_models(&mut mod_tokens, x);
 
             // Each sync group is an independent entity on its own data source, so
             // it gets its own migration covering only the tables it syncs.

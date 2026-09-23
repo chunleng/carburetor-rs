@@ -180,13 +180,13 @@ mod tests {
             result.name.to_token_stream().to_string(),
             "\"value\"".to_string()
         );
-        assert_eq!(result.dollar_prefixed, false);
+        assert!(!result.dollar_prefixed);
         let result: DeclarationArgumentValue = parse2(quote!($value)).unwrap();
         assert_eq!(
             result.name.to_token_stream().to_string(),
             "value".to_string()
         );
-        assert_eq!(result.dollar_prefixed, true);
+        assert!(result.dollar_prefixed);
         let result: Result<DeclarationArgumentValue> = parse2(quote!($"value"));
         assert!(result.is_err());
     }

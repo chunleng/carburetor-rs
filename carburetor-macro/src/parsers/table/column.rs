@@ -41,79 +41,78 @@ impl TryFrom<DieselTableStyleContent> for CarburetorColumn {
 
         for attr in value.attrs.iter() {
             // Handle #[default(...)] — Meta::List with nested name-value or bare path
-            if let Meta::List(list) = attr {
-                if list.path.is_ident("default") {
-                    if default_value.is_some() {
-                        return Err(Error::new_spanned(
-                            attr,
-                            "multiple `#[default]` tags are not allowed on a single column",
-                        ));
-                    }
-                    has_user_default = true;
-                    let meta = list.parse_args::<Meta>()?;
-                    match meta {
-                        Meta::NameValue(nv) => {
-                            let key = nv.path.get_ident().ok_or_else(|| {
-                                Error::new_spanned(&nv.path, "expected `rust` or `sql`")
-                            })?;
-                            match key.to_string().as_str() {
-                                "rust" => {
-                                    if let Expr::Lit(ExprLit {
-                                        lit: Lit::Str(ref s),
-                                        ..
-                                    }) = nv.value
-                                    {
-                                        let tokens: TokenStream =
-                                            s.value().parse().map_err(|e| {
-                                                Error::new_spanned(
-                                                    &nv.value,
-                                                    format!("invalid Rust expression: {e}"),
-                                                )
-                                            })?;
-                                        default_value = Some(DefaultValue::Rust(tokens));
-                                    } else {
-                                        return Err(Error::new_spanned(
+            if let Meta::List(list) = attr
+                && list.path.is_ident("default")
+            {
+                if default_value.is_some() {
+                    return Err(Error::new_spanned(
+                        attr,
+                        "multiple `#[default]` tags are not allowed on a single column",
+                    ));
+                }
+                has_user_default = true;
+                let meta = list.parse_args::<Meta>()?;
+                match meta {
+                    Meta::NameValue(nv) => {
+                        let key = nv.path.get_ident().ok_or_else(|| {
+                            Error::new_spanned(&nv.path, "expected `rust` or `sql`")
+                        })?;
+                        match key.to_string().as_str() {
+                            "rust" => {
+                                if let Expr::Lit(ExprLit {
+                                    lit: Lit::Str(ref s),
+                                    ..
+                                }) = nv.value
+                                {
+                                    let tokens: TokenStream = s.value().parse().map_err(|e| {
+                                        Error::new_spanned(
                                             &nv.value,
-                                            "expected a string literal for `rust = \"...\"`",
-                                        ));
-                                    }
-                                }
-                                #[cfg(feature = "migration")]
-                                "sql" => {
-                                    let sql_default = parse_sql_default(&nv.value)?;
-                                    default_value = Some(DefaultValue::Sql(sql_default));
-                                }
-                                _ => {
+                                            format!("invalid Rust expression: {e}"),
+                                        )
+                                    })?;
+                                    default_value = Some(DefaultValue::Rust(tokens));
+                                } else {
                                     return Err(Error::new_spanned(
-                                        key,
-                                        "expected `rust` or `sql`, found unknown key",
+                                        &nv.value,
+                                        "expected a string literal for `rust = \"...\"`",
                                     ));
                                 }
                             }
-                        }
-                        Meta::Path(path) if path.is_ident("sql") => {
-                            #[cfg(not(feature = "migration"))]
-                            {
-                                default_value = Some(DefaultValue::Sql);
-                            }
                             #[cfg(feature = "migration")]
-                            {
+                            "sql" => {
+                                let sql_default = parse_sql_default(&nv.value)?;
+                                default_value = Some(DefaultValue::Sql(sql_default));
+                            }
+                            _ => {
                                 return Err(Error::new_spanned(
-                                    path,
-                                    "`sql` requires a variant when the migration feature is \
-                                     enabled (e.g., `sql = Now`)",
+                                    key,
+                                    "expected `rust` or `sql`, found unknown key",
                                 ));
                             }
                         }
-                        other => {
+                    }
+                    Meta::Path(path) if path.is_ident("sql") => {
+                        #[cfg(not(feature = "migration"))]
+                        {
+                            default_value = Some(DefaultValue::Sql);
+                        }
+                        #[cfg(feature = "migration")]
+                        {
                             return Err(Error::new_spanned(
-                                other,
-                                "expected `rust = \"...\"`, `sql = <variant>`, or `sql`",
+                                path,
+                                "`sql` requires a variant when the migration feature is \
+                                     enabled (e.g., `sql = Now`)",
                             ));
                         }
                     }
-                    continue;
+                    other => {
+                        return Err(Error::new_spanned(
+                            other,
+                            "expected `rust = \"...\"`, `sql = <variant>`, or `sql`",
+                        ));
+                    }
                 }
+                continue;
             }
 
             let ident: Ident = parse_quote! {#attr};

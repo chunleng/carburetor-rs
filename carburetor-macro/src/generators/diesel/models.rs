@@ -75,7 +75,7 @@ impl<'a> ToTokens for AsFullModel<'a> {
             })
             .collect::<Vec<_>>();
         let diesel_table = AsDieselTable {
-            table: &self.0,
+            table: self.0,
             prefix: None,
         };
         let derive_header = quote!(#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, diesel::Queryable, diesel::Selectable)]);
@@ -250,15 +250,10 @@ impl<'a> ToTokens for AsDieselTable<'a> {
                 quote!(#table_name)
             }
         };
-        let diesel_backend: Path;
-        match get_target_type() {
-            TargetType::Backend => {
-                diesel_backend = parse_quote!(diesel::pg::Pg);
-            }
-            TargetType::Client => {
-                diesel_backend = parse_quote!(diesel::sqlite::Sqlite);
-            }
-        }
+        let diesel_backend: Path = match get_target_type() {
+            TargetType::Backend => parse_quote!(diesel::pg::Pg),
+            TargetType::Client => parse_quote!(diesel::sqlite::Sqlite),
+        };
 
         tokens.extend(quote! {
             #[diesel(table_name = #table_path)]
@@ -268,9 +263,9 @@ impl<'a> ToTokens for AsDieselTable<'a> {
 }
 
 pub(crate) fn generate_diesel_model(tokens: &mut TokenStream, table: &CarburetorTable) {
-    let new_model = AsFullModel(&table);
-    let update_model = AsChangesetModel(&table);
-    let insert_model = AsInsertModel(&table);
+    let new_model = AsFullModel(table);
+    let update_model = AsChangesetModel(table);
+    let insert_model = AsInsertModel(table);
 
     tokens.extend(quote! {
         #new_model

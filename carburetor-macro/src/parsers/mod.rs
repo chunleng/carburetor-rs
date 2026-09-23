@@ -43,7 +43,7 @@ impl Parse for CarburetorSyncConfig {
                     tables = Vec::<CarburetorTable>::parse_iteratively_from
                         .parse2(block.content)?
                         .into_iter()
-                        .map(|x| Rc::new(x))
+                        .map(Rc::new)
                         .collect();
                 }
                 "sync_groups" => {
@@ -57,14 +57,14 @@ impl Parse for CarburetorSyncConfig {
                         .parse2(block.content)?
                         .into_iter()
                         .map(|x| {
-                            Ok(CarburetorSyncGroup::from_lookup_table_names(
+                            CarburetorSyncGroup::from_lookup_table_names(
                                 x.ident,
                                 &Punctuated::<DeclarationSettingBlock, token::Comma>::parse_terminated
                                     .parse2(x.content)?
                                     .into_iter()
                                     .collect::<Vec<_>>(),
                                 &tables,
-                            )?)
+                            )
                         })
                         .collect::<Result<Vec<_>>>()?;
                 }

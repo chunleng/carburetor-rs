@@ -128,7 +128,7 @@ mod client {
                 .0
                 .table_configs
                 .iter()
-                .map(|x| AsRetrieveTableUploadFunction(x))
+                .map(AsRetrieveTableUploadFunction)
                 .collect::<Vec<_>>();
 
             let upload_request_model_name = AsUploadRequest(self.0).get_model_name();
@@ -309,7 +309,7 @@ mod client {
                 .0
                 .table_configs
                 .iter()
-                .map(|x| AsProcessTableUploadResponseFunction(x))
+                .map(AsProcessTableUploadResponseFunction)
                 .collect::<Vec<_>>();
 
             let upload_response_model_name = AsUploadResponseModel(self.0).get_model_name();
@@ -533,7 +533,7 @@ mod backend {
                 .0
                 .table_configs
                 .iter()
-                .map(|x| AsProcessTableUploadFunction(x))
+                .map(AsProcessTableUploadFunction)
                 .collect::<Vec<_>>();
 
             let upload_request_model_name = AsUploadRequest(self.0).get_model_name();

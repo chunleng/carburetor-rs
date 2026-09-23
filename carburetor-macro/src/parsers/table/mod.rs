@@ -68,7 +68,7 @@ impl Parse for CarburetorTable {
 
         let mut columns = columns
             .into_iter()
-            .map(|x| CarburetorColumn::try_from(x).map(|x| Rc::new(x)))
+            .map(|x| CarburetorColumn::try_from(x).map(Rc::new))
             .collect::<Result<Vec<_>>>()?;
         for column in columns.iter() {
             match column.column_type {
@@ -150,10 +150,10 @@ impl Parse for CarburetorTable {
             });
 
         let mut columns_ident: Vec<_> = columns.iter().map(|x| x.ident.clone()).collect::<Vec<_>>();
-        columns_ident.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
+        columns_ident.sort_by_key(|a| a.to_string());
         if let Some(duplicate_ident) = columns_ident
             .windows(2)
-            .find(|x| x[0].to_string() == x[1].to_string())
+            .find(|x| x[0] == x[1])
             .map(|x| x[0].clone())
         {
             return Err(Error::new_spanned(
