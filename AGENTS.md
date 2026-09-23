@@ -1,60 +1,50 @@
-# AGENTS.md
-
 ## Overview
 
 Rust LWW CRDT lib for local-first apps. See Cargo.toml + README.md.
 
-## Test Structure
+## Documentation
+`docs/` contains useful documentation, organized by type: `tutorial/`, `how-to/`, `explanation/`, `reference/`, and `development/`.
 
-E2E tests in `tests/e2e-test/tests/` follow pattern: `edge_cases/` (special
-conditions), `happy_paths/` (normal ops), `unhappy_paths/` (error handling). New
-tests → match existing folder structure. Uses `sample-test-backend/` (RPC
-server) + `sample-test-core/` (shared schema).
+## Test Structure
+E2E tests in `tests/e2e-test/tests/` are categorized by expected outcome:
+1. The final assertion expects an error or rejection to persist → `unhappy_paths/`
+2. The test asserts success under unusual timing, state, or client/backend version skew → `edge_cases/` (e.g. mutation between retrieve and store, unknown column from a newer backend, simulated error with successful recovery)
+3. Otherwise → `happy_paths/`
+
+`happy_paths/` and `unhappy_paths/` files are named by operation area (e.g. `upload.rs`); `edge_cases/` by scenario (e.g. `dirty_while_upload.rs`). Uses `sample-test-backend/` (RPC server) + `sample-test-core/` (shared schema).
 
 ## Sync Flow Architecture
-
 **Two-way sync: PostgreSQL backend ↔ SQLite clients**
 
 **Download (Backend → Client)**:
-Backend generates `download_<group>(offsets)` → queries each table for
-`last_synced_at > offset`. Returns `DownloadResponse` with records + new offsets
-per table. Client calls `store_download_response()` → merges server data into
-local SQLite DB using LWW conflict resolution.
+Backend generates `download_<group>(offsets)` → queries each table for `last_synced_at > offset`. Returns `DownloadResponse` with records + new offsets per table. Client calls `store_download_response()` → merges server data into local SQLite DB using LWW conflict resolution.
 
 **Upload (Client → Backend)**:
-Client tracks dirty records via `dirty_flag` (INSERT/UPDATE) +
-`client_column_sync_metadata` (per-column timestamps). Client calls
-`upload_<group>()` → sends dirty records to backend. Backend's
-`upload_<group>(request)` applies LWW merge using column timestamps → returns
-response. Client clears dirty flags after successful upload.
+Client tracks dirty records via `dirty_flag` (INSERT/UPDATE) + `client_column_sync_metadata` (per-column timestamps). Client calls `upload_<group>()` → sends dirty records to backend. Backend's `upload_<group>(request)` applies LWW merge using column timestamps → returns response. Client clears dirty flags after successful upload.
 
 **Local Operations (Client)**:
-Clients work offline using generated per-table functions: `insert_<table>()`,
-`update_<table>()`, `delete_<table>()` automatically set dirty flags.
-`active_<plural>()` provides query helpers that filter out soft-deleted records.
+Clients work offline using generated per-table functions: `insert_<table>()`, `update_<table>()`, `delete_<table>()` automatically set dirty flags. `active_<plural>()` provides query helpers that filter out soft-deleted records.
+
+## Sync Groups
+Each sync group syncs one consumer's subset of data to one local data source. E.g. `user` (mobile app, user data only) vs `admin` (webpage, all data). Each group generates its own download/upload functions, models, and migration that covers only tables the sync group will use.
 
 ## Commands
 
-### Test & Check
+### Run All Checks
 
 ```bash
-# CARGO_TARGET_DIR separates backend and client build artifacts so they can
-# build/test in parallel without recompiling each other's feature variants.
-
-# E2E testing
-# Tests share a single SQLite DB guarded by a mutex; tests run in parallel.
-# Build sample-test-backend first: tests spawn the pre-built binary directly
-CARGO_TARGET_DIR=target/backend cargo build -p sample-test-backend && CARGO_TARGET_DIR=target/client CARBURETOR_TARGET=client cargo test -p e2e-test
-
-# Backend
-CARGO_TARGET_DIR=target/backend cargo build -p carburetor --features=diesel/postgres
-
-# Client
-CARGO_TARGET_DIR=target/client CARBURETOR_TARGET=client cargo build -p carburetor --features=diesel/sqlite --features=migration
+make all
 ```
+
+Standard way to run all format, lint, and test checks. Each check's output is written to a temp file (the path is printed), and the run ends with an aggregate summary of failed checks.
+
+### Individual Commands
+
+The Makefile is the source of truth for individual commands. Check it (or run `make help`) for the standard way to run a specific check. Never invent cargo commands from general knowledge. `CARGO_TARGET_DIR` separates backend and client build artifacts so they can build in parallel.
 
 ### Other Useful Commands
 
+Commands not covered by the Makefile:
 ```bash
 # Backend
 CARGO_TARGET_DIR=target/backend cargo run --example simple-backend --features backend
@@ -68,33 +58,22 @@ CARGO_TARGET_DIR=target/client CARBURETOR_TARGET=client cargo expand --example s
 ## Common Pitfalls
 
 ### Soft Deletion
-
-Records never physically deleted. `is_deleted` flag marks records as deleted
-while preserving sync info. Always use `active_<plural>()` to query non-deleted
-records.
+Records never physically deleted. `is_deleted` flag marks records as deleted while preserving sync info. Always use `active_<plural>()` to query non-deleted records.
 
 ### Time Synchronization
-
-- **Backend**: Uses PostgreSQL server time for `last_synced_at` → avoids clock
-  skew between backend instances
-- **Client**: Uses local device time for `dirty_at` in metadata. Clock changes
-  on device → sync issues (acceptable trade-off)
-- **Incremental sync**: Small timing differences → missed records; PostgreSQL
-  time = source of truth
+- **Backend**: Uses PostgreSQL server time for `last_synced_at` → avoids clock skew between backend instances
+- **Client**: Uses local device time for `dirty_at` in metadata. Clock changes on device → sync issues (acceptable trade-off)
+- **Incremental sync**: Small timing differences → missed records; PostgreSQL time = source of truth
 
 ### Column-Level Conflict Resolution
-
 `client_column_sync_metadata` tracks per-column timestamps. During sync:
+
 - Incoming updates with older timestamps than local data → rejected per-column
 - Locally dirty columns → not overwritten by incoming server data
 - Enables granular LWW at column level, not just row level
 
 ### Test DB Mutex Ordering
-
-Tests share a single SQLite DB guarded by a `std::sync::Mutex`. When a test uses
-both the backend and the client DB, **start the backend server before acquiring
-the DB lock**. Otherwise the test holds the lock during container startup,
-serializing other tests that are waiting for the DB:
+Tests share a single SQLite DB guarded by a `std::sync::Mutex`. When a test uses both the backend and the client DB, **start the backend server before acquiring the DB lock**. Otherwise the test holds the lock during container startup, serializing other tests that are waiting for the DB:
 
 ```rust
 let backend_server = TestBackendHandle::start();
@@ -104,20 +83,7 @@ let mut conn = db.get_connection();
 ```
 
 ### Non-Atomic Group Queries
-
-Download queries for each table in group run independently (no transaction). FK
-integrity across tables not guaranteed at query time. `cutoff_at` timestamp
-parameter ensures all tables in sync group use same time cutoff → reduces window
-where FK relationships temporarily broken during download.
+Download queries for each table in group run independently (no transaction). FK integrity across tables not guaranteed at query time. `cutoff_at` timestamp parameter ensures all tables in sync group use same time cutoff → reduces window where FK relationships temporarily broken during download.
 
 ## Macro Code Generation & Helpers
-
-`carburetor-macro` generates sync code inline via `quote!`. Logic embedded in a
-`quote!` block is hard to read and untestable. **The purpose of
-`carburetor/src/helpers/` is to host runtime helper functions that generated code
-calls, so that complex logic moves out of `quote!` into ordinary, testable Rust
-functions.** Extracting logic here is the primary way to simplify code generation
-— when a `quote!` block becomes verbose or repeats across generators, move that
-logic into a helper and replace the inline code with a call to it.
-For a step-by-step example of adding and using a helper, see
-[`.agent/macro-helper.md`](.agent/macro-helper.md).
+`carburetor-macro` generates sync code inline via `quote!`. Logic embedded in a `quote!` block is hard to read and untestable. **The purpose of `carburetor/src/helpers/` is to host runtime helper functions that generated code calls, so that complex logic moves out of `quote!` into ordinary, testable Rust functions.** Extracting logic here is the primary way to simplify code generation— when a `quote!` block becomes verbose or repeats across generators, move that logic into a helper and replace the inline code with a call to it. For a step-by-step example of adding and using a helper, see [`.agent/macro-helper.md`](.agent/macro-helper.md).
