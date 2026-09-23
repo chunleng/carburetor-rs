@@ -4,12 +4,19 @@
 
 Rust LWW CRDT lib for local-first apps. See Cargo.toml + README.md.
 
+## Documentation
+`docs/` contains useful documentation, organized by type: `tutorial/`, `how-to/`, `explanation/`, `reference/`, and `development/`.
+
 ## Test Structure
 
-E2E tests in `tests/e2e-test/tests/` follow pattern: `edge_cases/` (special
-conditions), `happy_paths/` (normal ops), `unhappy_paths/` (error handling). New
-tests → match existing folder structure. Uses `sample-test-backend/` (RPC
-server) + `sample-test-core/` (shared schema).
+E2E tests in `tests/e2e-test/tests/` are categorized by expected outcome:
+1. The final assertion expects an error or rejection to persist → `unhappy_paths/`
+2. The test asserts success under unusual timing, state, or client/backend version skew → `edge_cases/` (e.g. mutation between retrieve and store, unknown column from a newer backend, simulated error with successful recovery)
+3. Otherwise → `happy_paths/`
+
+`happy_paths/` and `unhappy_paths/` files are named by operation area (e.g.
+`upload.rs`); `edge_cases/` by scenario (e.g. `dirty_while_upload.rs`). Uses
+`sample-test-backend/` (RPC server) + `sample-test-core/` (shared schema).
 
 ## Sync Flow Architecture
 
@@ -32,6 +39,12 @@ response. Client clears dirty flags after successful upload.
 Clients work offline using generated per-table functions: `insert_<table>()`,
 `update_<table>()`, `delete_<table>()` automatically set dirty flags.
 `active_<plural>()` provides query helpers that filter out soft-deleted records.
+
+## Sync Groups
+Each sync group syncs one consumer's subset of data to one local data source.
+E.g. `user` (mobile app, user data only) vs `admin` (webpage, all data). Each
+group generates its own download/upload functions, models, and migration
+that covers only tables the sync group will use.
 
 ## Commands
 
