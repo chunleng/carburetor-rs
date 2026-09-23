@@ -176,10 +176,10 @@ impl TryFrom<&Type> for DieselPostgresType {
             }
             // Use strum for safer type, as compared to match ident.to_string().as_str() which
             // we might forget to add when new types are added.
-            return Ok(ident
+            return ident
                 .to_string()
                 .parse()
-                .map_err(|_| Error::new_spanned(ty, error_message))?);
+                .map_err(|_| Error::new_spanned(ty, error_message));
         }
 
         Err(Error::new_spanned(ty, error_message))

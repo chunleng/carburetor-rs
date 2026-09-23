@@ -29,9 +29,9 @@ impl CarburetorSyncGroup {
                 .iter()
                 .map(|x| {
                     let message = "Table in sync group does not exist in table declaration";
-                    Ok(tables_lookup
-                        .into_iter()
-                        .find(|table| table.ident.to_string() == x.ident.to_string())
+                    tables_lookup
+                        .iter()
+                        .find(|table| table.ident == x.ident)
                         .ok_or(Error::new_spanned(x.ident.clone(), message))
                         .and_then(|lookup_table| {
                             let config = SyncGroupTableConfig::new_with_arguments(
@@ -63,7 +63,7 @@ impl CarburetorSyncGroup {
                                 }
                             }
                             config
-                        })?)
+                        })
                 })
                 .collect::<Result<Vec<_>>>()?,
             contexts,
@@ -117,16 +117,11 @@ impl SyncGroupTableConfig {
                     let restrict_to_column = reference_table
                         .columns
                         .iter()
-                        .find(|x| {
-                            x.ident.to_string() == arg.value.name.to_token_stream().to_string()
-                        })
+                        .find(|x| x.ident == arg.value.name.to_token_stream().to_string())
                         .cloned()
                         .ok_or(Error::new_spanned(
                             &arg.name,
-                            &format!(
-                                "No such column in `{}` table",
-                                reference_table.ident.to_string()
-                            ),
+                            format!("No such column in `{}` table", reference_table.ident),
                         ))?;
                     if !restrict_to_column.is_immutable {
                         return Err(Error::new_spanned(

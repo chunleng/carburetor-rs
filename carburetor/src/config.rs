@@ -12,7 +12,7 @@ pub fn initialize_carburetor_global_config(config: CarburetorGlobalConfig) {
 
 #[cfg(any(for_backend, for_client))]
 pub(crate) fn get_carburetor_config() -> &'static CarburetorGlobalConfig {
-    CONFIG.get_or_init(|| CarburetorGlobalConfig::default())
+    CONFIG.get_or_init(CarburetorGlobalConfig::default)
 }
 
 #[derive(Debug, Clone)]

@@ -344,7 +344,7 @@ pub mod client {
     ) -> crate::error::Result<()> {
         for col in declared {
             if let Some(db_col) = existing.iter().find(|e| e.name == col.name) {
-                let declared_affinity = sqlite_affinity(&col.sql_type);
+                let declared_affinity = sqlite_affinity(col.sql_type);
                 let db_affinity = sqlite_affinity(&db_col.sql_type);
                 if declared_affinity != db_affinity {
                     return Err(crate::error::Error::Migration(format!(

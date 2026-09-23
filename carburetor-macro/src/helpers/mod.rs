@@ -18,12 +18,12 @@ pub fn get_target_type() -> TargetType {
 }
 
 pub(crate) fn parse_as<T: Parse + Spanned>(syntax: &impl ToTokens) -> Result<T> {
-    Ok(parse2::<T>((&syntax).to_token_stream()).map_err(|e| {
+    parse2::<T>(syntax.to_token_stream()).map_err(|e| {
         Error::new_spanned(
-            &syntax,
+            syntax,
             format!("fail parsing to <{}>: {}", type_name::<T>(), e),
         )
-    })?)
+    })
 }
 
 pub(crate) fn parse_str_as<T: Parse + Spanned + ToTokens>(code_str: &str, span: Span) -> Result<T> {

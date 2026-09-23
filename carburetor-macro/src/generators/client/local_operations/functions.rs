@@ -31,15 +31,13 @@ impl<'a> ToTokens for AsLocalInsertFunction<'a> {
         tokens.extend(quote!(
             pub fn #function_name(insert_value: #local_insert_model_name) -> carburetor::error::Result<#full_model_name> {
                 use diesel::{RunQueryDsl, Connection};
-                Ok(
-                    diesel::insert_into(#table_name::table)
-                        .values(#insert_model_name::from(insert_value))
-                        .get_result(&mut carburetor::helpers::get_connection()?)
-                        .map_err(|e| carburetor::error::Error::Unhandled {
-                            message: "record insertion failed".to_string(),
-                            source: e.into(),
-                    })?
-                )
+                diesel::insert_into(#table_name::table)
+                    .values(#insert_model_name::from(insert_value))
+                    .get_result(&mut carburetor::helpers::get_connection()?)
+                    .map_err(|e| carburetor::error::Error::Unhandled {
+                        message: "record insertion failed".to_string(),
+                        source: e.into(),
+                    })
             }
         ));
     }
@@ -103,33 +101,29 @@ impl<'a> ToTokens for AsLocalUpdateFunction<'a> {
                 let mut changeset = #changeset_model_name::from(update_value);
                 let changeset_id = changeset.#id_column_name.clone();
                 let mut conn = carburetor::helpers::get_connection()?;
-                Ok(
-                    conn.immediate_transaction(|conn| -> Result<#full_model_name, diesel::result::Error> {
-                        let existing_item = #table_name::table
-                            .select(#full_model_name::as_select())
-                            .find(&changeset.#id_column_name)
-                            .first(conn)?;
+                conn.immediate_transaction(|conn| -> Result<#full_model_name, diesel::result::Error> {
+                    let existing_item = #table_name::table
+                        .select(#full_model_name::as_select())
+                        .find(&changeset.#id_column_name)
+                        .first(conn)?;
 
-                        if existing_item.#dirty_column_name.is_none() {
-                            changeset.#dirty_column_name = Some(
-                                Some(carburetor::helpers::client_sync_metadata::DirtyFlag::Update.to_string())
-                            );
-                        }
+                    if existing_item.#dirty_column_name.is_none() {
+                        changeset.#dirty_column_name = Some(
+                            Some(carburetor::helpers::client_sync_metadata::DirtyFlag::Update.to_string())
+                        );
+                    }
 
-                        let mut new_metadata: carburetor::helpers::client_sync_metadata::ClientSyncMetadata<#client_metadata_model_name> = carburetor::serde_json::from_value(existing_item.#client_metadata_column_name).unwrap_or_default();
-                        #(#check_data_column_change)*
-                        changeset.#client_metadata_column_name = Some(new_metadata.into());
-                        Ok(
-                            diesel::update(#table_name::table.find(changeset_id))
-                                .set(changeset)
-                                .get_result(conn)?
-                        )
-                    })
-                    .map_err(|e| carburetor::error::Error::Unhandled {
-                        message: "error has occurred in diesel while attempting to update record".to_string(),
-                        source: e.into(),
-                    })?
-                )
+                    let mut new_metadata: carburetor::helpers::client_sync_metadata::ClientSyncMetadata<#client_metadata_model_name> = carburetor::serde_json::from_value(existing_item.#client_metadata_column_name).unwrap_or_default();
+                    #(#check_data_column_change)*
+                    changeset.#client_metadata_column_name = Some(new_metadata.into());
+                    diesel::update(#table_name::table.find(changeset_id))
+                        .set(changeset)
+                        .get_result(conn)
+                })
+                .map_err(|e| carburetor::error::Error::Unhandled {
+                    message: "error has occurred in diesel while attempting to update record".to_string(),
+                    source: e.into(),
+                })
             }
         ));
     }
@@ -188,39 +182,35 @@ impl<'a> ToTokens for AsLocalDeleteFunction<'a> {
                 };
                 let changeset_id = changeset.#id_column_name.clone();
                 let mut conn = carburetor::helpers::get_connection()?;
-                Ok(
-                    conn.immediate_transaction(|conn| -> Result<#full_model_name, diesel::result::Error> {
-                        let existing_item = #table_name::table
-                            .select(#full_model_name::as_select())
-                            .find(&changeset.#id_column_name)
-                            .first(conn)?;
+                conn.immediate_transaction(|conn| -> Result<#full_model_name, diesel::result::Error> {
+                    let existing_item = #table_name::table
+                        .select(#full_model_name::as_select())
+                        .find(&changeset.#id_column_name)
+                        .first(conn)?;
 
-                        if existing_item.#dirty_column_name.is_none() {
-                            changeset.#dirty_column_name = Some(
-                                Some(carburetor::helpers::client_sync_metadata::DirtyFlag::Update.to_string())
-                            );
-                        }
+                    if existing_item.#dirty_column_name.is_none() {
+                        changeset.#dirty_column_name = Some(
+                            Some(carburetor::helpers::client_sync_metadata::DirtyFlag::Update.to_string())
+                        );
+                    }
 
-                        let mut new_metadata: carburetor::helpers::client_sync_metadata::ClientSyncMetadata<#client_metadata_model_name> = carburetor::serde_json::from_value(existing_item.#client_metadata_column_name).unwrap_or_default();
-                        new_metadata
-                            .data
-                            .get_or_insert_default()
-                            .#delete_column_name
-                            .get_or_insert_default()
-                            .dirty_at = Some(carburetor::helpers::get_utc_now());
-                        changeset.#client_metadata_column_name = Some(new_metadata.into());
+                    let mut new_metadata: carburetor::helpers::client_sync_metadata::ClientSyncMetadata<#client_metadata_model_name> = carburetor::serde_json::from_value(existing_item.#client_metadata_column_name).unwrap_or_default();
+                    new_metadata
+                        .data
+                        .get_or_insert_default()
+                        .#delete_column_name
+                        .get_or_insert_default()
+                        .dirty_at = Some(carburetor::helpers::get_utc_now());
+                    changeset.#client_metadata_column_name = Some(new_metadata.into());
 
-                        Ok(
-                            diesel::update(#table_name::table.find(changeset_id))
-                                .set(changeset)
-                                .get_result(conn)?
-                        )
-                    })
-                    .map_err(|e| carburetor::error::Error::Unhandled {
-                        message: "error has occurred in diesel while attempting to delete record".to_string(),
-                        source: e.into(),
-                    })?
-                )
+                    diesel::update(#table_name::table.find(changeset_id))
+                        .set(changeset)
+                        .get_result(conn)
+                })
+                .map_err(|e| carburetor::error::Error::Unhandled {
+                    message: "error has occurred in diesel while attempting to delete record".to_string(),
+                    source: e.into(),
+                })
             }
         ));
     }

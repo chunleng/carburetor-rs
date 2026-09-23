@@ -206,7 +206,7 @@ impl<'a> ToTokens for AsLocalUpdateToChangeset<'a> {
             .reference_table
             .columns
             .iter()
-            .filter_map(
+            .map(
                 |x| match (&x.column_type, &x.column_scope, &x.is_immutable) {
                     (&CarburetorColumnType::Id, _, _)
                     | (
@@ -215,15 +215,15 @@ impl<'a> ToTokens for AsLocalUpdateToChangeset<'a> {
                         false,
                     ) => {
                         let field_name = &x.ident;
-                        Some(quote! {
+                        quote! {
                             #field_name: value.#field_name
-                        })
+                        }
                     }
                     _ => {
                         let field_name = &x.ident;
-                        Some(quote! {
+                        quote! {
                             #field_name: None
-                        })
+                        }
                     }
                 },
             )

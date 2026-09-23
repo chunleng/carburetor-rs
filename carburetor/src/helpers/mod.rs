@@ -28,14 +28,12 @@ pub fn get_db_utc_now(conn: &mut diesel::PgConnection) -> crate::error::Result<D
 pub fn get_connection() -> crate::error::Result<diesel::PgConnection> {
     use crate::{config::get_carburetor_config, error::Error};
     use diesel::{Connection, PgConnection};
-    Ok(
-        PgConnection::establish(&get_carburetor_config().database_url.clone()).map_err(|e| {
-            Error::Unhandled {
-                message: "Connection to PostgresDB failed".to_string(),
-                source: e.into(),
-            }
-        })?,
-    )
+    PgConnection::establish(&get_carburetor_config().database_url.clone()).map_err(|e| {
+        Error::Unhandled {
+            message: "Connection to PostgresDB failed".to_string(),
+            source: e.into(),
+        }
+    })
 }
 
 #[cfg(for_client)]

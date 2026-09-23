@@ -99,7 +99,7 @@ mod backend {
         fn to_tokens(&self, tokens: &mut TokenStream) {
             let table = &self.1.reference_table;
             let function_name = parse_str::<Ident>(&format!("download_{}", &table.ident)).unwrap();
-            let model_name = AsDownloadResponseTableModel(&self.0, &table).get_model_name();
+            let model_name = AsDownloadResponseTableModel(self.0, table).get_model_name();
             let table_name = AsSchemaTable(table).get_table_name_with_prefix("super");
             let last_synced_at_column_name =
                 table.sync_metadata_columns.last_synced_at.ident.clone();
@@ -186,14 +186,14 @@ mod backend {
                 .0
                 .table_configs
                 .iter()
-                .map(|x| AsDownloadFunction(&self.0, x))
+                .map(|x| AsDownloadFunction(self.0, x))
                 .collect::<Vec<_>>();
 
             let table_response_field_values = self
                 .0
                 .table_configs
                 .iter()
-                .map(|x| AsResponseFieldValue(x))
+                .map(AsResponseFieldValue)
                 .collect::<Vec<_>>();
 
             let has_context = AsSyncContext(self.0).has_context();

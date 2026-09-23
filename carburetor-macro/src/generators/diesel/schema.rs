@@ -11,15 +11,10 @@ struct AsSchemaType<'a>(&'a DieselPostgresType);
 
 impl<'a> ToTokens for AsSchemaType<'a> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let ty: Type;
-        match get_target_type() {
-            TargetType::Backend => {
-                ty = parse_str(&self.0.to_string()).unwrap();
-            }
-            TargetType::Client => {
-                ty = parse_str(&self.0.get_diesel_sqlite_string()).unwrap();
-            }
-        }
+        let ty: Type = match get_target_type() {
+            TargetType::Backend => parse_str(&self.0.to_string()).unwrap(),
+            TargetType::Client => parse_str(&self.0.get_diesel_sqlite_string()).unwrap(),
+        };
 
         tokens.extend(quote! { #ty });
     }

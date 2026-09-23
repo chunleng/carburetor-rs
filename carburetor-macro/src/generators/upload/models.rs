@@ -436,13 +436,11 @@ pub fn generate_upload_sync_group_models(
         let request_table = AsUploadRequestTable(x);
         let insert_table = AsUploadInsertTable(x);
         let update_table = AsUploadUpdateTable(x);
-        let conversion_functions: TokenStream;
-
-        match get_target_type() {
+        let conversion_functions: TokenStream = match get_target_type() {
             TargetType::Client => {
                 use crate::generators::upload::models::client::AsFromFullToTable;
                 let from_full_to_table = AsFromFullToTable(x);
-                conversion_functions = quote!(#from_full_to_table);
+                quote!(#from_full_to_table)
             }
             TargetType::Backend => {
                 use crate::generators::upload::models::backend::{
@@ -450,9 +448,9 @@ pub fn generate_upload_sync_group_models(
                 };
                 let from_insert_to_full = AsFromUploadInsertToInsertModel(x);
                 let from_update_to_changeset = AsFromUploadUpdateToChangeset(x);
-                conversion_functions = quote!(#from_insert_to_full #from_update_to_changeset);
+                quote!(#from_insert_to_full #from_update_to_changeset)
             }
-        }
+        };
 
         quote! {
             #request_table

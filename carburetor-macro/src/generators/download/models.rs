@@ -18,8 +18,7 @@ struct AsRequestField<'a>(&'a Rc<CarburetorTable>);
 
 impl<'a> ToTokens for AsRequestField<'a> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let field_name =
-            parse_str::<Type>(&format!("{}_offset", self.0.ident.to_string())).unwrap();
+        let field_name = parse_str::<Type>(&format!("{}_offset", self.0.ident)).unwrap();
         tokens.extend(quote! {
             pub #field_name: Option<carburetor::chrono::DateTimeUtc>
         });
@@ -60,7 +59,7 @@ mod client {
     impl<'a> ToTokens for AsFromModelToNewTableModel<'a> {
         fn to_tokens(&self, tokens: &mut TokenStream) {
             let model_name = self.model_name;
-            let insert_model = AsInsertModel(&self.table).get_model_name();
+            let insert_model = AsInsertModel(self.table).get_model_name();
 
             let columns = self
                 .table
@@ -125,7 +124,7 @@ mod client {
     impl<'a> ToTokens for AsFromModelToUpdateTableModel<'a> {
         fn to_tokens(&self, tokens: &mut TokenStream) {
             let model_name = self.model_name;
-            let diesel_changeset_model = AsChangesetModel(&self.table).get_model_name();
+            let diesel_changeset_model = AsChangesetModel(self.table).get_model_name();
 
             let columns = self
                 .table
