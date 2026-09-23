@@ -30,26 +30,21 @@ Each sync group syncs one consumer's subset of data to one local data source. E.
 
 ## Commands
 
-### Test & Check
+### Run All Checks
 
 ```bash
-# CARGO_TARGET_DIR separates backend and client build artifacts so they can
-# build/test in parallel without recompiling each other's feature variants.
-
-# E2E testing
-# Tests share a single SQLite DB guarded by a mutex; tests run in parallel.
-# Build sample-test-backend first: tests spawn the pre-built binary directly
-CARGO_TARGET_DIR=target/backend cargo build -p sample-test-backend && CARGO_TARGET_DIR=target/client CARBURETOR_TARGET=client cargo test -p e2e-test
-
-# Backend
-CARGO_TARGET_DIR=target/backend cargo build -p carburetor --features=diesel/postgres
-
-# Client
-CARGO_TARGET_DIR=target/client CARBURETOR_TARGET=client cargo build -p carburetor --features=diesel/sqlite --features=migration
+make all
 ```
+
+Standard way to run all format, lint, and test checks. Each check's output is written to a temp file (the path is printed), and the run ends with an aggregate summary of failed checks.
+
+### Individual Commands
+
+The Makefile is the source of truth for individual commands. Check it (or run `make help`) for the standard way to run a specific check. Never invent cargo commands from general knowledge. `CARGO_TARGET_DIR` separates backend and client build artifacts so they can build in parallel.
 
 ### Other Useful Commands
 
+Commands not covered by the Makefile:
 ```bash
 # Backend
 CARGO_TARGET_DIR=target/backend cargo run --example simple-backend --features backend
